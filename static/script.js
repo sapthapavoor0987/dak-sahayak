@@ -301,6 +301,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let mediaStream = null;
 let isRecordingVoice = false;
+let recordingTimeout = null;
 
 async function toggleVoiceInput() {
     const micBtn = document.getElementById('micBtn');
@@ -308,6 +309,7 @@ async function toggleVoiceInput() {
 
     // If currently recording, stop recorder
     if (isRecordingVoice && mediaRecorder && mediaRecorder.state !== 'inactive') {
+        if (recordingTimeout) clearTimeout(recordingTimeout);
         mediaRecorder.stop();
         return;
     }
@@ -349,9 +351,18 @@ async function toggleVoiceInput() {
                 input.value = '';
                 input.placeholder = "Recording your voice... Click mic again to submit 🎙️";
             }
+
+            // Auto-stop recording after 10 seconds if user doesn't click stop manually
+            if (recordingTimeout) clearTimeout(recordingTimeout);
+            recordingTimeout = setTimeout(() => {
+                if (isRecordingVoice && mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            }, 10000);
         };
 
         mediaRecorder.onstop = async () => {
+            if (recordingTimeout) clearTimeout(recordingTimeout);
             isRecordingVoice = false;
             if (micBtn) {
                 micBtn.classList.remove('recording');
