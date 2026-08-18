@@ -489,6 +489,72 @@ body {
     color: var(--primary-red);
 }
 
+/* Voice & TTS Controls */
+.voice-btn {
+    color: var(--primary-red);
+    transition: all 0.3s ease;
+    border-radius: 50%;
+}
+
+.voice-btn:hover {
+    background: rgba(211, 47, 47, 0.1);
+    color: var(--dark-red);
+    transform: scale(1.1);
+}
+
+.voice-btn.recording {
+    background: #D32F2F !important;
+    color: #FFFFFF !important;
+    animation: pulse-recording 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-recording {
+    0% {
+        box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.7);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(211, 47, 47, 0);
+        transform: scale(1.12);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(211, 47, 47, 0);
+        transform: scale(1);
+    }
+}
+
+.speak-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.speak-btn:hover {
+    border-color: var(--primary-red);
+    color: var(--primary-red);
+    background: #FFFFFF;
+}
+
+.speak-btn.speaking {
+    background: #FFEBEE;
+    border-color: #D32F2F;
+    color: #D32F2F;
+    animation: pulse-speak 1s infinite alternate;
+}
+
+@keyframes pulse-speak {
+    from { transform: scale(1); }
+    to { transform: scale(1.08); }
+}
+
 .send-btn {
     background: var(--primary-red);
     color: #FFFFFF;
