@@ -416,14 +416,71 @@ async function toggleVoiceInput() {
         mediaRecorder.start();
 
     } catch (err) {
-        console.error("Microphone Access Error:", err);
+        console.warn("Microphone getUserMedia failed, attempting browser Web Speech API fallback:", err);
         isRecordingAudio = false;
+
+        // Attempt browser SpeechRecognition fallback
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            try {
+                const fallbackRec = new SpeechRecognition();
+                fallbackRec.continuous = false;
+                fallbackRec.interimResults = true;
+                fallbackRec.lang = LANG_CODES[currentLanguage] || 'en-IN';
+
+                fallbackRec.onstart = () => {
+                    if (micBtn) {
+                        micBtn.classList.add('recording');
+                        micBtn.innerHTML = '<i class="fa-solid fa-microphone-lines fa-bounce"></i>';
+                    }
+                    if (input) {
+                        input.value = '';
+                        input.placeholder = "Listening... Speak your question now 🎙️";
+                    }
+                };
+
+                fallbackRec.onresult = (e) => {
+                    let text = '';
+                    for (let i = e.resultIndex; i < e.results.length; ++i) {
+                        text += e.results[i][0].transcript;
+                    }
+                    if (input && text) input.value = text;
+                };
+
+                fallbackRec.onend = () => {
+                    if (micBtn) {
+                        micBtn.classList.remove('recording');
+                        micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                    }
+                    if (input) {
+                        input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
+                        if (input.value.trim().length > 0) handleSend();
+                    }
+                };
+
+                fallbackRec.onerror = () => {
+                    if (micBtn) {
+                        micBtn.classList.remove('recording');
+                        micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                    }
+                    if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
+                    showToast("🔒 Microphone access is blocked. Please click the Lock icon in your browser address bar to set Microphone to 'Allow'.");
+                };
+
+                fallbackRec.start();
+                return;
+
+            } catch (fallbackErr) {
+                console.error("SpeechRecognition fallback failed:", fallbackErr);
+            }
+        }
+
         if (micBtn) {
             micBtn.classList.remove('recording');
             micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
         }
         if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-        showToast("⚠️ Microphone access failed. Please check your microphone connection & browser permissions.");
+        showToast("🔒 Microphone access is blocked. Please click the Lock icon in your browser address bar (top-left next to 127.0.0.1:5000) and set Microphone to 'Allow'.");
     }
 }
 
