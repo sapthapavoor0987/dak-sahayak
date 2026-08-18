@@ -14,7 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from fetch_sources import harvest_documents
 from pdf_reader import load_dynamic_knowledge_base
-from database import init_db, log_chat, update_feedback, get_recent_history
+from database import init_db, log_chat, update_feedback, get_recent_history, search_pincode
 from calculator import (
     calculate_speed_post, calculate_ordinary_letter, calculate_postcard,
     calculate_inland_letter, calculate_ordinary_parcel, calculate_registered_post, calculate_insurance
@@ -190,12 +190,26 @@ def api_chat():
 
     location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
 
+    # Detect 6-digit Indian PIN codes in message
+    pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
+    detected_pin_context = ""
+    if pin_matches:
+        pin_blocks = []
+        for p_code in set(pin_matches):
+            po_records = search_pincode(p_code)
+            if po_records:
+                for po in po_records[:5]:
+                    pin_blocks.append(f"- Post Office: {po['Name']} | PIN: {po['Pincode']} | Type: {po['BranchType']} | Delivery: {po['DeliveryStatus']} | District: {po['District']} | State: {po['State']}")
+        if pin_blocks:
+            detected_pin_context = "\n\nDetected PIN Code Directory Records:\n" + "\n".join(pin_blocks)
+
     system_prompt = f"""You are Dak Sahayak (डाक सहायक), the official India Post AI assistant.
 Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali), generate natural native script text.
 Always maintain strict conversational continuity with previous turns in this dialogue session.
 When the user asks follow-up questions (such as 'when will it reach?', 'minimum amount?', 'how to apply?', 'what if 2kg?', 'how to withdraw early?'), answer specifically for the exact scheme, consignment, or service previously discussed without asking them to repeat details.
 Format your response in 2 to 4 concise, informative bullet points.
 {location_str}
+{detected_pin_context}
 
 Official India Post Knowledge Base:
 {context_text}"""
@@ -317,49 +331,9 @@ def api_calculator():
 @app.route("/api/pincode/<query>", methods=["GET"])
 def api_pincode(query):
     query_str = str(query).strip()
-    
-    try:
-        if query_str.isdigit() and len(query_str) == 6:
-            url = f"https://api.postalpincode.in/pincode/{query_str}"
-        else:
-            url = f"https://api.postalpincode.in/postoffice/{query_str}"
-            
-        resp = requests.get(url, timeout=5)
-        if resp.status_code == 200:
-            res_json = resp.json()
-            if res_json and isinstance(res_json, list) and res_json[0].get("Status") == "Success":
-                post_offices = res_json[0].get("PostOffice", [])
-                return jsonify({"status": "Success", "results": post_offices})
-    except Exception as e:
-        print(f"[-] Online PIN lookup failed ({e}), using local dictionary.")
-
-    results = []
-    if query_str in MOCK_PINCODES:
-        results = MOCK_PINCODES[query_str]
-    else:
-        q_lower = query_str.lower()
-        for pin, offices in MOCK_PINCODES.items():
-            if q_lower in pin:
-                results.extend(offices)
-            else:
-                for off in offices:
-                    if q_lower in off["Name"].lower() or q_lower in off["District"].lower() or q_lower in off["State"].lower():
-                        results.append(off)
-
+    results = search_pincode(query_str)
     if results:
         return jsonify({"status": "Success", "results": results})
-
-    if query_str.isdigit() and len(query_str) == 6:
-        generic_result = [{
-            "Name": f"Post Office (PIN: {query_str})",
-            "BranchType": "Sub Post Office",
-            "DeliveryStatus": "Delivery",
-            "District": "Postal Division",
-            "State": "India",
-            "Pincode": query_str
-        }]
-        return jsonify({"status": "Success", "results": generic_result})
-
     return jsonify({"status": "Error", "message": f"No post office found for '{query_str}'"}), 404
 
 if __name__ == "__main__":

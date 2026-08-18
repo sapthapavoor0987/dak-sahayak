@@ -1,0 +1,40 @@
+office_name,pincode,office_type,delivery_status,division,district,state,circle
+New Delhi GPO,110001,Head Post Office,Delivery,New Delhi Central,New Delhi,Delhi,Delhi Circle
+Connaught Place SO,110001,Sub Post Office,Non-Delivery,New Delhi Central,New Delhi,Delhi,Delhi Circle
+Parliament House SO,110001,Sub Post Office,Delivery,New Delhi Central,New Delhi,Delhi,Delhi Circle
+Mumbai GPO,400001,Head Post Office,Delivery,Mumbai South,Mumbai,Maharashtra,Maharashtra Circle
+Fort Market SO,400001,Sub Post Office,Delivery,Mumbai South,Mumbai,Maharashtra,Maharashtra Circle
+Bengaluru GPO,560001,Head Post Office,Delivery,Bengaluru Central,Bengaluru,Karnataka,Karnataka Circle
+Vidhana Soudha SO,560001,Sub Post Office,Delivery,Bengaluru Central,Bengaluru,Karnataka,Karnataka Circle
+Mangaluru Head Office,575001,Head Post Office,Delivery,Mangaluru Division,Dakshina Kannada,Karnataka,Karnataka Circle
+Balaniketan SO,575001,Sub Post Office,Delivery,Mangaluru Division,Dakshina Kannada,Karnataka,Karnataka Circle
+Kolkata GPO,700001,Head Post Office,Delivery,Kolkata Central,Kolkata,West Bengal,West Bengal Circle
+Chennai GPO,600001,Head Post Office,Delivery,Chennai Central,Chennai,Tamil Nadu,Tamil Nadu Circle
+Hyderabad GPO,500001,Head Post Office,Delivery,Hyderabad City,Hyderabad,Telangana,Telangana Circle
+Ahmedabad GPO,380001,Head Post Office,Delivery,Ahmedabad City,Ahmedabad,Gujarat,Gujarat Circle
+Pune Head Office,411001,Head Post Office,Delivery,Pune City,Pune,Maharashtra,Maharashtra Circle
+Jaipur GPO,302001,Head Post Office,Delivery,Jaipur City,Jaipur,Rajasthan,Rajasthan Circle
+Lucknow GPO,226001,Head Post Office,Delivery,Lucknow Division,Lucknow,Uttar Pradesh,Uttar Pradesh Circle
+Patna GPO,800001,Head Post Office,Delivery,Patna Division,Patna,Bihar,Bihar Circle
+Guwahati GPO,781001,Head Post Office,Delivery,Guwahati Division,Kamrup Metropolitan,Assam,Assam Circle
+Srinagar GPO,190001,Head Post Office,Delivery,Srinagar Division,Srinagar,Jammu & Kashmir,J&K Circle
+Thiruvananthapuram GPO,695001,Head Post Office,Delivery,Trivandrum North,Thiruvananthapuram,Kerala,Kerala Circle
+Chandigarh GPO,160001,Head Post Office,Delivery,Chandigarh Division,Chandigarh,Punjab,Punjab Circle
+Bhopal GPO,462001,Head Post Office,Delivery,Bhopal Division,Bhopal,Madhya Pradesh,MP Circle
+Bhubaneswar GPO,751001,Head Post Office,Delivery,Bhubaneswar Division,Khurda,Odisha,Odisha Circle
+Ranchi GPO,834001,Head Post Office,Delivery,Ranchi Division,Ranchi,Jharkhand,Jharkhand Circle
+Shimla GPO,171001,Head Post Office,Delivery,Shimla Division,Shimla,Himachal Pradesh,HP Circle
+Dehradun GPO,248001,Head Post Office,Delivery,Dehradun Division,Dehradun,Uttarakhand,Uttarakhand Circle
+Ernakulam Head Office,682001,Head Post Office,Delivery,Ernakulam Division,Ernakulam,Kerala,Kerala Circle
+Coimbatore Head Office,641001,Head Post Office,Delivery,Coimbatore Division,Coimbatore,Tamil Nadu,Tamil Nadu Circle
+Madurai Head Office,625001,Head Post Office,Delivery,Madurai Division,Madurai,Tamil Nadu,Tamil Nadu Circle
+Visakhapatnam Head Office,530001,Head Post Office,Delivery,Visakhapatnam Division,Visakhapatnam,Andhra Pradesh,AP Circle
+Vijayawada Head Office,520001,Head Post Office,Delivery,Vijayawada Division,NTR District,Andhra Pradesh,AP Circle
+Indore Head Office,452001,Head Post Office,Delivery,Indore Division,Indore,Madhya Pradesh,MP Circle
+Surat Head Office,395001,Head Post Office,Delivery,Surat Division,Surat,Gujarat,Gujarat Circle
+Ludhiana Head Office,141001,Head Post Office,Delivery,Ludhiana Division,Ludhiana,Punjab,Punjab Circle
+Amritsar Head Office,143001,Head Post Office,Delivery,Amritsar Division,Amritsar,Punjab,Punjab Circle
+Agra Head Office,282001,Head Post Office,Delivery,Agra Division,Agra,Uttar Pradesh,UP Circle
+Varanasi Head Office,221001,Head Post Office,Delivery,Varanasi Division,Varanasi,Uttar Pradesh,UP Circle
+Nagpur GPO,440001,Head Post Office,Delivery,Nagpur City,Nagpur,Maharashtra,Maharashtra Circle
+Kanpur Head Office,208001,Head Post Office,Delivery,Kanpur Division,Kanpur Nagar,Uttar Pradesh,UP Circle
