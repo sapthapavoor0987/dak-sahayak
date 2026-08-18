@@ -144,44 +144,42 @@ def api_chat():
     data = request.get_json() or {}
     user_message = data.get("message", "").strip()
     language = data.get("language", "English").strip()
+    history_raw = data.get("history", [])
+    pincode = data.get("pincode", "")
+    user_location = data.get("user_location", {})
 
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
 
-    # 1. Check Common Greetings Shortcut (Instant 0.01s response)
-    msg_clean = user_message.lower().strip().strip("!.,?")
-    GREETINGS = ["hi", "hello", "hey", "hlo", "hy", "namaste", "good morning", "good afternoon", "good evening", "help", "who are you", "what can you do"]
-    if msg_clean in GREETINGS and language == "English":
-        bot_response = "* Namaste! I am Dak Sahayak (डाक सहायक), your official India Post assistant.\n* Ask me about Speed Post tariffs, Post Office Savings Accounts (PPF, SSA, NSC), PIN Code searches, or live parcel tracking."
-        log_id = log_chat(user_message, bot_response, matched_category="Greeting")
-        return jsonify({
-            "reply": bot_response,
-            "response": bot_response,
-            "sources": [],
-            "log_id": log_id,
-            "category": "Greeting"
-        })
+    # Clean and format incoming history turns
+    formatted_history = []
+    history_context_keywords = []
 
-    # 2. Check Consignment Tracking Regex Shortcut
-    tracking_match = re.search(r'\b[A-Z]{2}\d{9}[A-Z]{2}\b', user_message.upper())
-    if tracking_match:
-        tracking_num = tracking_match.group(0)
-        bot_response = f"""* Consignment {tracking_num} Status: In Transit
-* Booking Office: New Delhi GPO (110001)
-* Destination: Mumbai GPO (400001)
-* Delivery Expected: Today by 5:00 PM"""
+    if isinstance(history_raw, list):
+        # Exclude the very last entry if client pushed user_message before making fetch
+        turns = history_raw[:-1] if (history_raw and history_raw[-1].get("role") == "user" and history_raw[-1].get("parts") and history_raw[-1]["parts"][0] == user_message) else history_raw
+        
+        for turn in turns:
+            role = turn.get("role", "")
+            parts = turn.get("parts", [])
+            text_content = ""
+            if isinstance(parts, list) and parts:
+                text_content = str(parts[0])
+            elif isinstance(turn.get("content"), str):
+                text_content = turn.get("content")
 
-        log_id = log_chat(user_message, bot_response, matched_category="Consignment Tracking")
-        return jsonify({
-            "reply": bot_response,
-            "response": bot_response,
-            "sources": [],
-            "log_id": log_id,
-            "category": "Consignment Tracking"
-        })
+            if role in ["user", "model"] and text_content.strip():
+                formatted_history.append(types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=text_content.strip())]
+                ))
+                # Extract key nouns/topics for contextual RAG retrieval
+                words = [w for w in text_content.split() if len(w) > 3 and w.lower() not in ["what", "how", "where", "when", "tell", "details", "scheme", "post", "office", "avail", "apply", "please", "can", "with"]]
+                history_context_keywords.extend(words[:3])
 
-    # 3. Dynamic Context Retrieval via RAG
-    retrieved_chunks = retrieve_top_chunks(user_message, top_k=5)
+    # 1. Dynamic Context Retrieval via RAG (Combines history context with current query)
+    rag_query = f"{' '.join(list(set(history_context_keywords))[-6:])} {user_message}".strip()
+    retrieved_chunks = retrieve_top_chunks(rag_query, top_k=5)
     
     context_text = ""
     sources_list = []
@@ -190,35 +188,52 @@ def api_chat():
         context_text = "\n".join([b for b in context_blocks if b])
         sources_list = retrieved_chunks
 
-    # 4. Direct Gemini API Call with Multilingual Instruction
-    system_prompt = f"You are Dak Sahayak, an India Post AI assistant. Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali, etc.), generate natural, accurate native script text while keeping specific terms like Speed Post, PPF, SSA, PIN code easy to understand. Format the answer concisely in 2 to 4 clean bullet points."
+    location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
 
-    prompt = f"""Official India Post Context:
-{context_text}
+    system_prompt = f"""You are Dak Sahayak (डाक सहायक), the official India Post AI assistant.
+Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali), generate natural native script text.
+Always maintain strict conversational continuity with previous turns in this dialogue session.
+When the user asks follow-up questions (such as 'when will it reach?', 'minimum amount?', 'how to apply?', 'what if 2kg?', 'how to withdraw early?'), answer specifically for the exact scheme, consignment, or service previously discussed without asking them to repeat details.
+Format your response in 2 to 4 concise, informative bullet points.
+{location_str}
 
-User Question: {user_message}
-Requested Output Language: {language}"""
+Official India Post Knowledge Base:
+{context_text}"""
 
     reply_text = ""
     if client:
         models_to_try = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest"]
         for m in models_to_try:
             try:
-                response = client.models.generate_content(
+                chat = client.chats.create(
                     model=m,
-                    contents=prompt,
+                    history=formatted_history,
                     config=types.GenerateContentConfig(
                         system_instruction=system_prompt,
                         temperature=0.2
                     )
                 )
+                response = chat.send_message(user_message)
                 if response and response.text:
                     reply_text = response.text.strip()
                     break
             except Exception as ex:
-                print(f"[-] Model {m} note: {ex}")
+                try:
+                    response = client.models.generate_content(
+                        model=m,
+                        contents=f"Previous Conversation:\n{formatted_history}\n\nCurrent Question: {user_message}",
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                            temperature=0.2
+                        )
+                    )
+                    if response and response.text:
+                        reply_text = response.text.strip()
+                        break
+                except Exception as ex2:
+                    print(f"[-] Chat model {m} note: {ex2}")
 
-    # 5. Robust Grounded RAG Fallback if reply_text is empty
+    # Fallback if reply_text is empty
     if not reply_text:
         if retrieved_chunks:
             extracted_bullets = []
@@ -232,9 +247,9 @@ Requested Output Language: {language}"""
                         break
                 if len(extracted_bullets) >= 4:
                     break
-            reply_text = "\n".join(extracted_bullets[:4]) if extracted_bullets else "* PLI (Postal Life Insurance): For govt & corporate professionals (Max ₹50 Lakhs).\n* RPLI (Rural Postal Life Insurance): For rural residents & villages (Max ₹10 Lakhs)."
+            reply_text = "\n".join(extracted_bullets[:4]) if extracted_bullets else "* India Post provides comprehensive Mail, Savings Bank, and Insurance services across India."
         else:
-            reply_text = "* PLI (Postal Life Insurance): For govt & corporate professionals (Max ₹50 Lakhs).\n* RPLI (Rural Postal Life Insurance): For rural residents & villages (Max ₹10 Lakhs)."
+            reply_text = "* India Post provides comprehensive Mail, Savings Bank, and Insurance services across India."
 
     # Determine category
     category = "General Inquiry"
@@ -248,11 +263,8 @@ Requested Output Language: {language}"""
     elif "ippb" in msg_lower or "aadhaar" in msg_lower or "aeps" in msg_lower or "doorstep" in msg_lower or "passport" in msg_lower:
         category = "IPPB & Aadhaar Services"
     elif "complaint" in msg_lower or "grievance" in msg_lower or "timing" in msg_lower or "hours" in msg_lower or "charter" in msg_lower or "compensation" in msg_lower:
-        category = "Grievances & Support"
-    elif "pincode" in msg_lower or "pin" in msg_lower or "post office" in msg_lower or "branch" in msg_lower:
-        category = "Branch & PIN Services"
+        category = "Grievance & Facilities"
 
-    # Log to SQLite
     log_id = log_chat(user_message, reply_text, matched_category=category)
 
     return jsonify({

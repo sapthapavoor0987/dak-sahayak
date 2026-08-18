@@ -1,4 +1,5 @@
-// Active session transcript storage for TXT export
+// Active session transcript storage and conversation history
+let chatHistory = [];
 let activeSessionChat = [];
 let currentLanguage = localStorage.getItem('dak_selected_lang') || 'English';
 
@@ -167,6 +168,9 @@ async function handleSend(e) {
     appendMessage('user', message);
     activeSessionChat.push({ sender: 'USER', message: message, time: new Date().toLocaleTimeString() });
 
+    // Record user turn in global chat history
+    chatHistory.push({ role: "user", parts: [message] });
+
     input.value = '';
     const sendBtn = document.getElementById('sendBtn');
     if (sendBtn) {
@@ -183,6 +187,7 @@ async function handleSend(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: message,
+                history: chatHistory,
                 language: currentLanguage
             })
         });
@@ -194,6 +199,10 @@ async function handleSend(e) {
         if (response.ok) {
             const rawText = data.reply || data.response || data.message;
             const replyText = (rawText && rawText.trim()) ? rawText.trim() : "* India Post offers multiple Small Savings Schemes including PPF, SSA (Sukanya Samriddhi), NSC, and Post Office Savings Account.";
+            
+            // Record assistant turn in global chat history
+            chatHistory.push({ role: "model", parts: [replyText] });
+            
             appendMessage('bot', replyText, data.sources || [], data.log_id);
             activeSessionChat.push({ sender: 'DAK SAHAYAK', message: replyText, time: new Date().toLocaleTimeString() });
         } else {
@@ -306,6 +315,7 @@ function clearChat() {
         </div>
     `;
     activeSessionChat = [];
+    chatHistory = [];
 }
 
 // Feedback submission
