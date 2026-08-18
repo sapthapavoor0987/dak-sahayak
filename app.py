@@ -194,21 +194,6 @@ def get_real_pincode_details(pincode: str):
 
     return None
 
-def reverse_geocode_lat_lon(lat: float, lon: float):
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
-        res = requests.get(url, headers=headers, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            postcode = data.get("address", {}).get("postcode", "")
-            match = re.search(r'\b[1-9][0-9]{5}\b', str(postcode))
-            if match:
-                return match.group(0)
-    except Exception as e:
-        print(f"Reverse geocode error: {e}")
-    return None
-
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     data = request.get_json() or {}
@@ -221,27 +206,7 @@ def api_chat():
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
 
-    # 0a. Check for latitude / longitude coordinates in user_message or user_location
-    lat_lon_match = re.search(r'lat:\s*(-?\d+\.\d+).*lon:\s*(-?\d+\.\d+)', user_message.lower())
-    found_coord_pin = None
-    if lat_lon_match:
-        found_coord_pin = reverse_geocode_lat_lon(float(lat_lon_match.group(1)), float(lat_lon_match.group(2)))
-    elif user_location and user_location.get("latitude") and user_location.get("longitude"):
-        found_coord_pin = reverse_geocode_lat_lon(float(user_location["latitude"]), float(user_location["longitude"]))
-
-    if found_coord_pin:
-        real_coord_response = get_real_pincode_details(found_coord_pin)
-        if real_coord_response:
-            log_id = log_chat(user_message, real_coord_response, matched_category="PIN Code Lookup")
-            return jsonify({
-                "reply": real_coord_response,
-                "response": real_coord_response,
-                "sources": [],
-                "log_id": log_id,
-                "category": "PIN Code Lookup"
-            })
-
-    # 0b. Instant PIN Code Resolution (6-digit Indian PIN match)
+    # 0. Instant PIN Code Resolution (6-digit Indian PIN match)
     pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
     if pin_matches:
         real_pincode_response = get_real_pincode_details(pin_matches[0])
@@ -366,6 +331,18 @@ Official India Post Small Savings Rates:
 - Public Provident Fund (PPF): 7.1% p.a. (Compounded annually)
 - Post Office Recurring Deposit (RD): 6.7% p.a. (Compounded quarterly)
 - Post Office Savings Account (POSA): 4.0% p.a.
+
+MANDATORY RULE FOR BANK CHARGES & FEE SCHEDULE INQUIRIES:
+Whenever a user asks about Post Office bank charges, fee schedules, duplicate passbook fees, account transfer charges, nomination update costs, or cheque book fees, format your response in clean, concise bullet points or markdown tables using exact official India Post fee rates:
+- Duplicate Passbook: ₹50
+- Statement of Account / Deposit Receipt: ₹20 per case
+- Passbook in lieu of lost/mutilated certificate: ₹10 per registration
+- Nomination change / cancellation: Completely Free (No fee applicable as per SB Order No. 05/2025)
+- Account Transfer: ₹100
+- Pledging of Account: ₹100
+- Cheque Book: Free for up to 10 leaves/year, ₹2 per leaf thereafter
+- Cheque Dishonour / Bounce: ₹100
+(Note: Statutory taxes/GST as applicable on above charges shall also be payable).
 
 MANDATORY RULE FOR ALL PIN CODE & LOCATION QUERIES:
 Whenever the user asks about a PIN code or its location/taluk/district/branch (e.g., "575020", "location of 575020", "Ullal", "PIN 110001"), you MUST respond using ONLY this exact structured template for each matching post office:

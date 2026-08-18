@@ -76,15 +76,19 @@ def load_dynamic_knowledge_base(docs_dir=None):
         except Exception as e:
             print(f"    [-] Error reading TXT '{filename}': {e}")
 
-    # Process JSON Small Savings Schemes Dataset
+    # Process JSON Small Savings Schemes & Fee Schedule Datasets
     try:
-        from fetch_sources import load_savings_schemes
+        from fetch_sources import load_savings_schemes, load_schedule_of_fees
         json_chunks = load_savings_schemes()
         if json_chunks:
             knowledge_base.extend(json_chunks)
             print(f"    [+] JSON Savings Schemes: {len(json_chunks)} structured records indexed.")
+        fee_chunks = load_schedule_of_fees()
+        if fee_chunks:
+            knowledge_base.extend(fee_chunks)
+            print(f"    [+] JSON POSB Fee Schedule: {len(fee_chunks)} master record indexed.")
     except Exception as ex:
-        print(f"    [-] Error loading JSON savings schemes: {ex}")
+        print(f"    [-] Error loading JSON datasets: {ex}")
 
     print(f"[*] Dynamic Knowledge Extractor complete: Total {len(knowledge_base)} chunks loaded.")
     return knowledge_base

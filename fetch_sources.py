@@ -236,6 +236,36 @@ def load_savings_schemes():
         print(f"[-] Error loading savings schemes JSON: {e}")
         return []
 
+def load_schedule_of_fees():
+    """Reads data/schedule_of_fees.json and returns formatted chunk dicts for RAG indexing."""
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "schedule_of_fees.json")
+    if not os.path.exists(json_path):
+        return []
+        
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            fees = json.load(f)
+            
+        fee_lines = ["OFFICIAL INDIA POST POSB SCHEDULE OF FEES & CHARGES:"]
+        for item in fees:
+            fee_lines.append(f"- Service: {item.get('service')} | Fee: {item.get('fee')} ({item.get('details')})")
+        
+        full_text = "\n".join(fee_lines) + "\nNote: Statutory taxes/GST as applicable on above charges shall also be payable."
+        
+        blocks = [{
+            "text": full_text,
+            "source": "schedule_of_fees.json",
+            "page": 1,
+            "chunk_id": "fees_master",
+            "source_display": "India Post POSB Schedule of Fees & Bank Service Charges"
+        }]
+        print(f"    [+] Loaded POSB Schedule of Fees ({len(fees)} service items) from 'schedule_of_fees.json'.")
+        return blocks
+    except Exception as e:
+        print(f"[-] Error loading schedule of fees JSON: {e}")
+        return []
+
 if __name__ == "__main__":
     harvest_documents()
     load_savings_schemes()
+    load_schedule_of_fees()

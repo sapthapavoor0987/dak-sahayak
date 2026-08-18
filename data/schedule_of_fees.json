@@ -1,0 +1,42 @@
+[
+  {
+    "service": "Duplicate Passbook",
+    "fee": "₹50",
+    "details": "Issue of duplicate passbook in case of loss, damage, or mutilation"
+  },
+  {
+    "service": "Statement of Account / Deposit Receipt",
+    "fee": "₹20 per case",
+    "details": "Issue of account statement or deposit receipt / certificate of balance"
+  },
+  {
+    "service": "Passbook in lieu of lost/mutilated certificate",
+    "fee": "₹10 per registration",
+    "details": "Issue of passbook in place of lost or mutilated savings certificate"
+  },
+  {
+    "service": "Nomination Change / Cancellation",
+    "fee": "Completely Free (₹0)",
+    "details": "Cancellation or change of nomination is completely free as per SB Order No. 05/2025"
+  },
+  {
+    "service": "Account Transfer",
+    "fee": "₹100",
+    "details": "Transfer of POSB account or certificate from one post office to another"
+  },
+  {
+    "service": "Pledging of Account",
+    "fee": "₹100",
+    "details": "Pledging of savings account or certificate as security / collateral for loan"
+  },
+  {
+    "service": "Cheque Book",
+    "fee": "Free for up to 10 leaves/year; ₹2 per leaf thereafter",
+    "details": "Issue of cheque book for POSB savings account"
+  },
+  {
+    "service": "Cheque Dishonour / Bounce",
+    "fee": "₹100",
+    "details": "Penalty fee charged for dishonoured or bounced cheque"
+  }
+]

@@ -160,13 +160,6 @@ async function handleSend(e) {
 
     if (!message) return;
 
-    const msgTrimmed = message.toLowerCase().trim();
-    if (["my location", "my current location", "my pincode", "my location pincode", "my pin", "where am i"].includes(msgTrimmed)) {
-        input.value = '';
-        fetchCurrentLocationPin();
-        return;
-    }
-
     // Hide welcome card on first message
     const welcomeCard = document.getElementById('welcomeCard');
     if (welcomeCard) welcomeCard.style.display = 'none';
@@ -473,80 +466,11 @@ async function loadHistoryModal() {
                 `;
             });
             container.innerHTML = listHTML;
+        } else {
+            container.innerHTML = '<p class="placeholder-text">No query history logged yet.</p>';
+        }
     } catch (err) {
         container.innerHTML = '<p class="placeholder-text">Failed to load history logs.</p>';
     }
-}
-
-// Geolocation & Reverse Geocoding Helper
-async function fetchCurrentLocationPin() {
-    const btn = document.getElementById('detectLocationBtn');
-    const originalContent = btn ? btn.innerHTML : '<span>📍 My PIN</span>';
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Locating...</span>';
-    }
-
-    if (!navigator.geolocation) {
-        alert("Geolocation is not supported by your browser.");
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = originalContent;
-        }
-        return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-
-            try {
-                // Free OpenStreetMap Nominatim reverse-geocoding API
-                const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-                const data = await resp.json();
-
-                let pincode = data?.address?.postcode || data?.address?.pincode;
-                if (pincode) {
-                    const match = pincode.match(/\b[1-9][0-9]{5}\b/);
-                    if (match) pincode = match[0];
-                }
-
-                if (pincode) {
-                    if (btn) {
-                        btn.innerHTML = `<i class="fa-solid fa-location-dot"></i> <span>📍 ${pincode}</span>`;
-                        btn.disabled = false;
-                    }
-                    sendPrompt(`location of ${pincode}`);
-                } else {
-                    sendPrompt(`my current location lat:${lat} lon:${lon}`);
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = originalContent;
-                    }
-                }
-            } catch (err) {
-                console.error("Reverse geocoding error:", err);
-                sendPrompt(`my current location lat:${lat} lon:${lon}`);
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalContent;
-                }
-            }
-        },
-        (error) => {
-            console.warn("Geolocation error/denied:", error);
-            alert("Location access denied or unavailable. Please enter your PIN code manually.");
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = originalContent;
-            }
-        },
-        { timeout: 10000, maximumAge: 60000 }
-    );
-}
-
-function detectUserLocation() {
-    fetchCurrentLocationPin();
 }
 
