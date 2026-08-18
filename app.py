@@ -190,7 +190,7 @@ def api_chat():
 
     location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
 
-    # Detect 6-digit Indian PIN codes in message
+    # Detect 6-digit Indian PIN codes or locality search in message
     pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
     detected_pin_context = ""
     if pin_matches:
@@ -198,26 +198,45 @@ def api_chat():
         for p_code in set(pin_matches):
             po_records = search_pincode(p_code)
             if po_records:
-                first_po = po_records[0]
-                state_dist = f"**State & District:** {first_po.get('State', 'N/A')}, {first_po.get('District', 'N/A')}"
-                taluk_div = f"**Taluk / Division:** {first_po.get('Taluk', 'N/A')}, {first_po.get('Division', 'N/A')}"
-                
-                office_bullets = []
-                for po in po_records:
-                    office_bullets.append(f"  * {po.get('Name')} — Type: {po.get('BranchType')} | Delivery Status: {po.get('DeliveryStatus')}")
-                
-                block = f"### Geographic & Branch Resolution for PIN Code {p_code}:\n- {state_dist}\n- {taluk_div}\n- **Covered Post Offices & Branch Types:**\n" + "\n".join(office_bullets)
-                pin_blocks.append(block)
+                for po in po_records[:3]:
+                    block = f"""
+**PIN Code Details**
+
+* **PIN Code:** {po.get('Pincode', p_code)}
+* **Post Office Name:** {po.get('Name', 'N/A')}
+* **Office Type:** {po.get('BranchType', 'Sub Post Office')} ({po.get('DeliveryStatus', 'Delivery')})
+* **Taluk:** {po.get('Taluk', 'N/A')}
+* **District:** {po.get('District', 'N/A')}
+* **Postal Division:** {po.get('Division', 'N/A')}
+* **Postal Region:** {po.get('Region', 'N/A')}
+* **Postal Circle:** {po.get('Circle', 'N/A')}
+* **Head Office (HO):** {po.get('HeadOffice', 'N/A')}"""
+                    pin_blocks.append(block.strip())
 
         if pin_blocks:
-            detected_pin_context = "\n\n" + "\n\n".join(pin_blocks)
+            detected_pin_context = "\n\nStructured Master PIN Directory Records:\n" + "\n\n".join(pin_blocks)
 
     system_prompt = f"""You are Dak Sahayak (डाक सहायक), the official India Post AI assistant.
 Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali), generate natural native script text.
 Always maintain strict conversational continuity with previous turns in this dialogue session.
-Whenever the user asks about a PIN code or its location/taluk/district/branch, always provide the exact District, Taluk/Tehsil, Postal Division, and an itemized breakdown of all Sub-Offices (SO) and Branch Offices (BO) under that PIN code.
-When the user asks follow-up questions (such as 'when will it reach?', 'minimum amount?', 'how to apply?', 'what if 2kg?', 'how to withdraw early?'), answer specifically for the exact scheme, consignment, or service previously discussed without asking them to repeat details.
-Format your response in clear, informative bullet points.
+
+MANDATORY RULE FOR ALL PIN CODE & LOCATION QUERIES:
+Whenever the user asks about a PIN code or its location/taluk/district/branch (e.g., "575020", "location of 575020", "Ullal", "PIN 110001"), you MUST respond using ONLY this exact structured template for each matching post office:
+
+**PIN Code Details**
+
+* **PIN Code:** [6-Digit PIN]
+* **Post Office Name:** [Full Office Name]
+* **Office Type:** [Sub Post Office (SO) / Branch Post Office (BO) / Head Post Office (HO)] ([Delivery / Non-Delivery])
+* **Taluk:** [Taluk / Tehsil]
+* **District:** [District Name]
+* **Postal Division:** [Division Name]
+* **Postal Region:** [Region Name]
+* **Postal Circle:** [Circle Name]
+* **Head Office (HO):** [Related Head Post Office]
+
+Do NOT write conversational fluff, introductory remarks, or concluding sentences before or after this block. Output the exact field labels verbatim.
+
 {location_str}
 {detected_pin_context}
 

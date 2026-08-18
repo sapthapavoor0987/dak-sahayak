@@ -95,6 +95,7 @@ def search_pincode(query: str) -> list[dict]:
 
         rows = cursor.fetchall()
         for r in rows:
+            ho_val = r["office_name"] if "Head" in (r["office_type"] or "") else f"{r['division'] or r['district']} Head Office"
             results.append({
                 "Name": r["office_name"],
                 "Pincode": r["pincode"],
@@ -105,7 +106,8 @@ def search_pincode(query: str) -> list[dict]:
                 "District": r["district"] or "",
                 "Region": r["region"] or "Postal Region",
                 "State": r["state"] or "",
-                "Circle": r["circle"] or ""
+                "Circle": r["circle"] or "",
+                "HeadOffice": ho_val
             })
     except Exception as e:
         print(f"[-] Local PIN DB search error: {e}")
@@ -129,6 +131,7 @@ def search_pincode(query: str) -> list[dict]:
                 post_offices = res_json[0].get("PostOffice", [])
                 formatted = []
                 for po in post_offices:
+                    ho_val = po.get("HeadOffice") or po.get("HO") or f"{po.get('Division', po.get('District', ''))} Head Office"
                     formatted.append({
                         "Name": po.get("Name", ""),
                         "Pincode": po.get("Pincode", query_str),
@@ -139,7 +142,8 @@ def search_pincode(query: str) -> list[dict]:
                         "District": po.get("District", ""),
                         "Region": po.get("Region", "Postal Region"),
                         "State": po.get("State", ""),
-                        "Circle": po.get("Circle", "")
+                        "Circle": po.get("Circle", ""),
+                        "HeadOffice": ho_val
                     })
                 if formatted:
                     return formatted
@@ -158,7 +162,8 @@ def search_pincode(query: str) -> list[dict]:
             "District": "India Postal Circle",
             "Region": "Postal Region",
             "State": "India",
-            "Circle": "India Post"
+            "Circle": "India Post",
+            "HeadOffice": "General Post Office"
         }]
 
     return []
