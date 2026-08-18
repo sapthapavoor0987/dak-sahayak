@@ -139,6 +139,59 @@ MOCK_PINCODES = {
 def index():
     return render_template("index.html")
 
+def get_real_pincode_details(pincode: str):
+    p_clean = pincode.strip()
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        res = requests.get(f"https://api.postalpincode.in/pincode/{p_clean}", headers=headers, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            if data and isinstance(data, list) and data[0].get("Status") == "Success":
+                po_list = data[0].get("PostOffice", [])
+                if po_list:
+                    primary = po_list[0]
+                    # Format exact details
+                    po_names = ", ".join([f"{p['Name']} ({p.get('BranchType', 'PO')})" for p in po_list])
+                    formatted = (
+                        f"**PIN Code Details**\n\n"
+                        f"* **PIN Code:** {primary.get('Pincode', p_clean)}\n"
+                        f"* **Post Office Name:** {po_names}\n"
+                        f"* **Office Type:** {primary.get('BranchType', 'Sub Post Office')} ({primary.get('DeliveryStatus', 'Delivery Office')})\n"
+                        f"* **Taluk:** {primary.get('Block') or primary.get('Taluk') or primary.get('District')}\n"
+                        f"* **District:** {primary.get('District')}\n"
+                        f"* **Postal Division:** {primary.get('Division')}\n"
+                        f"* **Postal Region:** {primary.get('Region')}\n"
+                        f"* **Postal Circle:** {primary.get('Circle')}\n"
+                        f"* **State:** {primary.get('State')}"
+                    )
+                    return formatted
+    except Exception as e:
+        print(f"Error fetching PIN: {e}")
+
+    # Fallback to local DB search if online API unavailable
+    try:
+        local_records = search_pincode(p_clean)
+        if local_records:
+            primary = local_records[0]
+            po_names = ", ".join([f"{p['Name']} ({p.get('BranchType', 'PO')})" for p in local_records])
+            formatted = (
+                f"**PIN Code Details**\n\n"
+                f"* **PIN Code:** {primary.get('Pincode', p_clean)}\n"
+                f"* **Post Office Name:** {po_names}\n"
+                f"* **Office Type:** {primary.get('BranchType', 'Sub Post Office')} ({primary.get('DeliveryStatus', 'Delivery Office')})\n"
+                f"* **Taluk:** {primary.get('Taluk') or primary.get('District')}\n"
+                f"* **District:** {primary.get('District')}\n"
+                f"* **Postal Division:** {primary.get('Division')}\n"
+                f"* **Postal Region:** {primary.get('Region')}\n"
+                f"* **Postal Circle:** {primary.get('Circle')}\n"
+                f"* **State:** {primary.get('State')}"
+            )
+            return formatted
+    except Exception as ex:
+        print(f"Local PIN lookup error: {ex}")
+
+    return None
+
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     data = request.get_json() or {}
@@ -150,6 +203,20 @@ def api_chat():
 
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
+
+    # 0. Instant PIN Code Resolution (6-digit Indian PIN match)
+    pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
+    if pin_matches:
+        real_pincode_response = get_real_pincode_details(pin_matches[0])
+        if real_pincode_response:
+            log_id = log_chat(user_message, real_pincode_response, matched_category="PIN Code Lookup")
+            return jsonify({
+                "reply": real_pincode_response,
+                "response": real_pincode_response,
+                "sources": [],
+                "log_id": log_id,
+                "category": "PIN Code Lookup"
+            })
 
     # Clean and format incoming history turns
     formatted_history = []
