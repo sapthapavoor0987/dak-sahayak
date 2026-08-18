@@ -17,7 +17,9 @@ from pdf_reader import load_dynamic_knowledge_base
 from database import init_db, log_chat, update_feedback, get_recent_history, search_pincode
 from calculator import (
     calculate_speed_post, calculate_ordinary_letter, calculate_postcard,
-    calculate_inland_letter, calculate_ordinary_parcel, calculate_registered_post, calculate_insurance
+    calculate_inland_letter, calculate_ordinary_parcel, calculate_registered_post, calculate_insurance,
+    calculate_sukanya_maturity, calculate_scss_payout, calculate_ppf_maturity,
+    calculate_mis_payout, calculate_nsc_maturity, calculate_kvp_maturity
 )
 
 # Load environment variables
@@ -283,9 +285,52 @@ def api_chat():
         if pin_blocks:
             detected_pin_context = "\n\nStructured Master PIN Directory Records:\n" + "\n\n".join(pin_blocks)
 
-    system_prompt = f"""You are Dak Sahayak (डाक सहायक), the official India Post AI assistant.
+    # Detect financial return / maturity calculation query
+    calc_context = ""
+    msg_lower = user_message.lower()
+    amt_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|lac|lacs|l)\b', msg_lower)
+    raw_num_match = re.search(r'\b\d{4,7}\b', msg_lower)
+    amt_val = None
+    if amt_match:
+        amt_val = float(amt_match.group(1)) * 100000.0
+    elif raw_num_match:
+        amt_val = float(raw_num_match.group(0))
+
+    if amt_val:
+        if any(k in msg_lower for k in ["sukanya", "ssa", "daughter", "girl"]):
+            res = calculate_sukanya_maturity(amt_val)
+            calc_context = f"\n\nDeterministic Calculation Result for Sukanya Samriddhi Account:\n- Annual Deposit: ₹{res['annual_deposit']:,.2f}\n- Deposit Period: 15 Years | Total Invested: ₹{res['total_invested']:,.2f}\n- Maturity Period: 21 Years | Interest Rate: 8.2%\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
+        elif any(k in msg_lower for k in ["scss", "senior citizen", "senior"]):
+            res = calculate_scss_payout(amt_val)
+            calc_context = f"\n\nDeterministic Calculation Result for Senior Citizen Savings Scheme (SCSS):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 8.2%\n- Quarterly Payout: ₹{res['quarterly_payout']:,.2f}\n- Annual Interest: ₹{res['annual_payout']:,.2f}\n- Total Interest Earned: ₹{res['total_interest_earned']:,.2f}\n- Total Maturity Payout: ₹{res['total_maturity_payout']:,.2f}"
+        elif any(k in msg_lower for k in ["ppf", "provident"]):
+            res = calculate_ppf_maturity(amt_val)
+            calc_context = f"\n\nDeterministic Calculation Result for Public Provident Fund (PPF):\n- Annual Deposit: ₹{res['annual_deposit']:,.2f}\n- Tenure: 15 Years | Interest Rate: 7.1%\n- Total Invested: ₹{res['total_invested']:,.2f}\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
+        elif any(k in msg_lower for k in ["mis", "monthly income"]):
+            res = calculate_mis_payout(amt_val)
+            calc_context = f"\n\nDeterministic Calculation Result for Post Office Monthly Income Scheme (MIS):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 7.4%\n- Monthly Income Payout: ₹{res['monthly_payout']:,.2f}\n- Annual Interest: ₹{res['annual_payout']:,.2f}\n- Total Interest Earned over 5 Years: ₹{res['total_interest_earned']:,.2f}"
+        elif any(k in msg_lower for k in ["nsc", "national savings certificate"]):
+            res = calculate_nsc_maturity(amt_val)
+            calc_context = f"\n\nDeterministic Calculation Result for National Savings Certificate (NSC):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 7.7% Compounded Annually\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
+        elif any(k in msg_lower for k in ["kvp", "kisan vikas"]):
+            res = calculate_kvp_maturity(amt_val)
+            calc_context = f"\n\nDeterministic Calculation Result for Kisan Vikas Patra (KVP):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 115 Months (9 Years 7 Months) | Interest Rate: 7.5%\n- Final Maturity Amount (Doubles Principal): ₹{res['maturity_value']:,.2f}"
+
+    system_prompt = f"""You are Dak Sahayak (डाक सहायक), official India Post assistant. Always provide structured, factual breakdowns for all Post Office Small Savings Schemes including interest rates, compounding frequency, min/max limits, required KYC documents, and tax status (Section 80C / 80TTA / 80TTB).
 Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali), generate natural native script text.
 Always maintain strict conversational continuity with previous turns in this dialogue session.
+
+Official India Post Small Savings Rates:
+- Sukanya Samriddhi Account (SSA): 8.2% p.a. (Compounded annually)
+- Senior Citizen Savings Scheme (SCSS): 8.2% p.a. (Paid quarterly)
+- National Savings Certificate (NSC VIII): 7.7% p.a. (Compounded annually)
+- Kisan Vikas Patra (KVP): 7.5% p.a. (Doubles in 115 months / 9 yrs 7 mos)
+- Mahila Samman Savings Certificate (MSSC): 7.5% p.a. (Compounded quarterly)
+- Post Office Time Deposit (5-Year FD): 7.5% p.a. (1-Yr 6.9%, 2-Yr 7.0%, 3-Yr 7.1%)
+- Post Office Monthly Income Scheme (MIS): 7.4% p.a. (Paid monthly)
+- Public Provident Fund (PPF): 7.1% p.a. (Compounded annually)
+- Post Office Recurring Deposit (RD): 6.7% p.a. (Compounded quarterly)
+- Post Office Savings Account (POSA): 4.0% p.a.
 
 MANDATORY RULE FOR ALL PIN CODE & LOCATION QUERIES:
 Whenever the user asks about a PIN code or its location/taluk/district/branch (e.g., "575020", "location of 575020", "Ullal", "PIN 110001"), you MUST respond using ONLY this exact structured template for each matching post office:
@@ -306,6 +351,7 @@ Do NOT write conversational fluff, introductory remarks, or concluding sentences
 
 {location_str}
 {detected_pin_context}
+{calc_context}
 
 Official India Post Knowledge Base:
 {context_text}"""

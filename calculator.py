@@ -218,9 +218,115 @@ def calculate_insurance(value_amount):
         "insurance_fee": fee
     }
 
+# Small Savings Schemes Financial Maturity Calculators
+
+def calculate_sukanya_maturity(annual_deposit, tenure_years=21):
+    """8.2% p.a. compounded annually. Deposits made for 15 years, matures in 21 years."""
+    dep = max(250.0, min(150000.0, float(annual_deposit)))
+    r = 0.082
+    total_invested = dep * 15.0
+    balance = 0.0
+    for year in range(1, 22):
+        if year <= 15:
+            balance += dep
+        balance += balance * r
+    
+    maturity_val = round(balance, 2)
+    interest_earned = round(maturity_val - total_invested, 2)
+    return {
+        "scheme": "Sukanya Samriddhi Account (SSA)",
+        "annual_deposit": dep,
+        "deposit_years": 15,
+        "maturity_years": 21,
+        "interest_rate": "8.2%",
+        "total_invested": total_invested,
+        "interest_earned": interest_earned,
+        "maturity_value": maturity_val
+    }
+
+def calculate_scss_payout(deposit_amount):
+    """8.2% p.a. paid quarterly (5 year tenure, max 30 Lakhs)."""
+    dep = max(1000.0, min(3000000.0, float(deposit_amount)))
+    r = 0.082
+    quarterly_interest = round((dep * r) / 4.0, 2)
+    total_interest_5yrs = round(quarterly_interest * 20.0, 2)
+    return {
+        "scheme": "Senior Citizen Savings Scheme (SCSS)",
+        "deposit_amount": dep,
+        "tenure_years": 5,
+        "interest_rate": "8.2%",
+        "quarterly_payout": quarterly_interest,
+        "annual_payout": round(quarterly_interest * 4.0, 2),
+        "total_interest_earned": total_interest_5yrs,
+        "total_maturity_payout": round(dep + total_interest_5yrs, 2)
+    }
+
+def calculate_ppf_maturity(annual_deposit, tenure_years=15):
+    """7.1% p.a. compounded annually."""
+    dep = max(500.0, min(150000.0, float(annual_deposit)))
+    r = 0.071
+    total_invested = dep * tenure_years
+    balance = 0.0
+    for _ in range(tenure_years):
+        balance = (balance + dep) * (1 + r)
+    maturity_val = round(balance, 2)
+    return {
+        "scheme": "Public Provident Fund (PPF)",
+        "annual_deposit": dep,
+        "tenure_years": tenure_years,
+        "interest_rate": "7.1%",
+        "total_invested": total_invested,
+        "interest_earned": round(maturity_val - total_invested, 2),
+        "maturity_value": maturity_val
+    }
+
+def calculate_mis_payout(deposit_amount):
+    """7.4% p.a. paid monthly (5 year tenure, max 9 Lakhs single / 15 Lakhs joint)."""
+    dep = max(1000.0, min(1500000.0, float(deposit_amount)))
+    r = 0.074
+    monthly_interest = round((dep * r) / 12.0, 2)
+    total_interest_5yrs = round(monthly_interest * 60.0, 2)
+    return {
+        "scheme": "Post Office Monthly Income Scheme (MIS)",
+        "deposit_amount": dep,
+        "tenure_years": 5,
+        "interest_rate": "7.4%",
+        "monthly_payout": monthly_interest,
+        "annual_payout": round(monthly_interest * 12.0, 2),
+        "total_interest_earned": total_interest_5yrs,
+        "total_maturity_payout": round(dep + total_interest_5yrs, 2)
+    }
+
+def calculate_nsc_maturity(deposit_amount, tenure_years=5):
+    """7.7% p.a. compounded annually for 5 years."""
+    dep = max(1000.0, float(deposit_amount))
+    r = 0.077
+    maturity_val = round(dep * ((1 + r) ** tenure_years), 2)
+    return {
+        "scheme": "National Savings Certificate (NSC VIII Issue)",
+        "deposit_amount": dep,
+        "tenure_years": 5,
+        "interest_rate": "7.7%",
+        "interest_earned": round(maturity_val - dep, 2),
+        "maturity_value": maturity_val
+    }
+
+def calculate_kvp_maturity(deposit_amount):
+    """7.5% p.a. compounded annually, doubles in 115 months."""
+    dep = max(1000.0, float(deposit_amount))
+    maturity_val = round(dep * 2.0, 2)
+    return {
+        "scheme": "Kisan Vikas Patra (KVP)",
+        "deposit_amount": dep,
+        "tenure_months": 115,
+        "tenure_display": "9 Years 7 Months",
+        "interest_rate": "7.5%",
+        "interest_earned": dep,
+        "maturity_value": maturity_val
+    }
+
 if __name__ == "__main__":
     print("Speed Post 350g 1500km:", calculate_speed_post(350, 1500))
-    print("Ordinary Letter 45g:", calculate_ordinary_letter(45))
-    print("Ordinary Parcel 1200g:", calculate_ordinary_parcel(1200))
-    print("Registered Post + AD:", calculate_registered_post(5.0, ad_required=True))
-    print("Insurance Rs. 500:", calculate_insurance(500))
+    print("Sukanya SSA 1.5 Lakh:", calculate_sukanya_maturity(150000))
+    print("SCSS 15 Lakh:", calculate_scss_payout(1500000))
+    print("MIS 9 Lakh:", calculate_mis_payout(900000))

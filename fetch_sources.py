@@ -196,5 +196,46 @@ def harvest_documents():
 
     print("[*] Document harvesting completed successfully!")
 
+import json
+
+def load_savings_schemes():
+    """Reads data/savings_schemes.json and returns a list of formatted chunk dicts for RAG indexing."""
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "savings_schemes.json")
+    if not os.path.exists(json_path):
+        return []
+        
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            schemes = json.load(f)
+            
+        blocks = []
+        for idx, s in enumerate(schemes):
+            doc_str = (
+                f"OFFICIAL INDIA POST SMALL SAVINGS SCHEME: {s.get('scheme_name')}\n"
+                f"- Category: {s.get('category')}\n"
+                f"- Current Interest Rate: {s.get('interest_rate')}\n"
+                f"- Compounding / Payout Frequency: {s.get('interest_frequency')}\n"
+                f"- Minimum Deposit: {s.get('min_deposit')}\n"
+                f"- Maximum Limit: {s.get('max_deposit')}\n"
+                f"- Scheme Tenure: {s.get('tenure')}\n"
+                f"- Eligibility: {s.get('eligibility')}\n"
+                f"- Tax Status: {s.get('tax_status')}\n"
+                f"- Required KYC Documents: {', '.join(s.get('required_documents', []))}\n"
+                f"- Key Operating Rules: {s.get('key_rules')}\n"
+            )
+            blocks.append({
+                "text": doc_str,
+                "source": "savings_schemes.json",
+                "page": 1,
+                "chunk_id": idx,
+                "source_display": f"India Post Small Savings Schemes — {s.get('scheme_name')}"
+            })
+        print(f"    [+] Loaded {len(blocks)} structured savings scheme records from 'savings_schemes.json'.")
+        return blocks
+    except Exception as e:
+        print(f"[-] Error loading savings schemes JSON: {e}")
+        return []
+
 if __name__ == "__main__":
     harvest_documents()
+    load_savings_schemes()
