@@ -16,7 +16,7 @@ INDIA POST MASTER SCHEMES, SERVICES, PLI, IPPB, PARCELS & GRIEVANCE DIRECTORY
 - TDS & Tax Exemption Thresholds: TDS applies under Section 194A if total POSB interest across schemes exceeds Rs 40,000/year (Rs 50,000/year for senior citizens). Submission of Form 15G or Form 15H prevents TDS deduction if eligible.
 - Account Dormancy / Silent Accounts: Account becomes silent/dormant if no financial transaction occurs for 3 continuous financial years. Revived by submitting fresh KYC documents at the home branch.
 - Mandatory Nomination Rules: Nomination is mandatory at the time of opening accounts and PLI policies. Up to 4 nominees can be assigned with defined percentage shares.
-- KYC Documents Required: Valid Aadhaar Card, PAN Card (mandatory for deposits over Rs 50,000), and 2 passport-size photographs.
+- Standard KYC Documents Required: Valid Aadhaar Card (PoI & PoA), PAN Card (mandatory for deposits over Rs 50,000; Form 60 if not allotted), 2 passport-size photographs, Account Opening & KYC form. Source of Funds proof required for cumulative deposits exceeding Rs 10 Lakhs under PMLA norms.
 
 2. Postal Life Insurance (PLI) vs. Rural PLI (RPLI):
 - Eligibility: PLI covers Govt/PSU/defense/bank staff, IT employees, and certified professionals (engineers, doctors, CAs, lawyers); RPLI is available to all rural residents and village public.
@@ -29,6 +29,7 @@ INDIA POST MASTER SCHEMES, SERVICES, PLI, IPPB, PARCELS & GRIEVANCE DIRECTORY
   * Sumangal / Gram Sumangal (Anticipated Endowment / Money Back): PLI Bonus Rs 48 | RPLI Bonus Rs 45. 15 or 20-yr terms; Periodic survival payouts (20% every few years) + balance at end.
   * Yugal Suraksha (Joint Life Spouse Cover): PLI Bonus Rs 52. Single premium covers both husband and wife; Minimum 1 spouse must be eligible for PLI.
   * Bal Jeevan Bima (Children Policy): PLI Bonus Rs 52 | RPLI Bonus Rs 48. Covers up to 2 children aged 5-20 yrs; Max SA Rs 1 Lakh (Parent age <= 45).
+- PLI / RPLI Required Documents: Employee ID / Service Certificate (for PLI eligibility), Age Proof (School leaving certificate, 10th marksheet, or Birth certificate), Medical Examination Report signed by authorized RMO / Govt Doctor. RPLI requires rural address proof.
 
 3. IPPB (India Post Payments Bank) & Aadhaar Services:
 - Account Types: Digital Savings Account (instant OTP open), Regular Savings Account (zero minimum balance limit), and Premium Savings Account.
@@ -65,7 +66,13 @@ INDIA POST MASTER SCHEMES, SERVICES, PLI, IPPB, PARCELS & GRIEVANCE DIRECTORY
 - APT 2.0 (Advanced Postal Technology): Unified cloud software platform powering counter operations with direct dynamic UPI QR payments, GPS-enabled postman delivery mapping, and real-time photo-proof delivery logs.
 - Post Office Act, 2023: Repeals the 125-year-old Indian Post Office Act of 1898. Eliminates the British-era exclusive government monopoly on carrying letters, allowing private courier networks to operate. Retains exclusive statutory privilege over official physical/digital postage stamps.
 
-7. Citizen Charter, Grievance Escalation & Branch Services:
+7. Scheme-Specific Additional Required Documents:
+- Sukanya Samriddhi Account (SSA): Birth Certificate of the girl child (mandatory, issued by municipal authority/hospital), Parent/Legal Guardian KYC (Aadhaar, PAN), Medical certificate/affidavit for twin or triplet girl children born after first child.
+- Senior Citizen Savings Scheme (SCSS): Age proof (Aadhaar, PAN, Passport age 60+). For VRS/retired employees (age 55-60 yrs): Employer certificate stating date of superannuation/retirement & proof of retirement benefits. For retired defence personnel (age 50+ yrs): Pension Payment Order (PPO) or Discharge Certificate.
+- Mahila Samman Savings Certificate (MSSC): Aadhaar card & PAN card of female applicant. For minor girl: Birth certificate of minor + guardian's KYC documents.
+- Public Provident Fund (PPF) & Minor Accounts: Birth certificate of minor child + Proof of natural parent or court-appointed legal guardianship.
+
+8. Citizen Charter, Grievance Escalation & Branch Services:
 - Service Delivery Timelines (Citizen Charter SLA):
   * Speed Post: Local (1-2 days), Metro-to-Metro (1-3 days), Same State (1-4 days), Rest of India (4-5 days).
   * Registered Letters/Parcels: Metro-to-Metro (3-5 days), Rest of India (5-7 days).
