@@ -194,6 +194,21 @@ def get_real_pincode_details(pincode: str):
 
     return None
 
+def reverse_geocode_lat_lon(lat: float, lon: float):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            postcode = data.get("address", {}).get("postcode", "")
+            match = re.search(r'\b[1-9][0-9]{5}\b', str(postcode))
+            if match:
+                return match.group(0)
+    except Exception as e:
+        print(f"Reverse geocode error: {e}")
+    return None
+
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     data = request.get_json() or {}
@@ -206,7 +221,27 @@ def api_chat():
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
 
-    # 0. Instant PIN Code Resolution (6-digit Indian PIN match)
+    # 0a. Check for latitude / longitude coordinates in user_message or user_location
+    lat_lon_match = re.search(r'lat:\s*(-?\d+\.\d+).*lon:\s*(-?\d+\.\d+)', user_message.lower())
+    found_coord_pin = None
+    if lat_lon_match:
+        found_coord_pin = reverse_geocode_lat_lon(float(lat_lon_match.group(1)), float(lat_lon_match.group(2)))
+    elif user_location and user_location.get("latitude") and user_location.get("longitude"):
+        found_coord_pin = reverse_geocode_lat_lon(float(user_location["latitude"]), float(user_location["longitude"]))
+
+    if found_coord_pin:
+        real_coord_response = get_real_pincode_details(found_coord_pin)
+        if real_coord_response:
+            log_id = log_chat(user_message, real_coord_response, matched_category="PIN Code Lookup")
+            return jsonify({
+                "reply": real_coord_response,
+                "response": real_coord_response,
+                "sources": [],
+                "log_id": log_id,
+                "category": "PIN Code Lookup"
+            })
+
+    # 0b. Instant PIN Code Resolution (6-digit Indian PIN match)
     pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
     if pin_matches:
         real_pincode_response = get_real_pincode_details(pin_matches[0])
