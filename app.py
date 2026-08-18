@@ -198,16 +198,26 @@ def api_chat():
         for p_code in set(pin_matches):
             po_records = search_pincode(p_code)
             if po_records:
-                for po in po_records[:5]:
-                    pin_blocks.append(f"- Post Office: {po['Name']} | PIN: {po['Pincode']} | Type: {po['BranchType']} | Delivery: {po['DeliveryStatus']} | District: {po['District']} | State: {po['State']}")
+                first_po = po_records[0]
+                state_dist = f"**State & District:** {first_po.get('State', 'N/A')}, {first_po.get('District', 'N/A')}"
+                taluk_div = f"**Taluk / Division:** {first_po.get('Taluk', 'N/A')}, {first_po.get('Division', 'N/A')}"
+                
+                office_bullets = []
+                for po in po_records:
+                    office_bullets.append(f"  * {po.get('Name')} — Type: {po.get('BranchType')} | Delivery Status: {po.get('DeliveryStatus')}")
+                
+                block = f"### Geographic & Branch Resolution for PIN Code {p_code}:\n- {state_dist}\n- {taluk_div}\n- **Covered Post Offices & Branch Types:**\n" + "\n".join(office_bullets)
+                pin_blocks.append(block)
+
         if pin_blocks:
-            detected_pin_context = "\n\nDetected PIN Code Directory Records:\n" + "\n".join(pin_blocks)
+            detected_pin_context = "\n\n" + "\n\n".join(pin_blocks)
 
     system_prompt = f"""You are Dak Sahayak (डाक सहायक), the official India Post AI assistant.
 Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali), generate natural native script text.
 Always maintain strict conversational continuity with previous turns in this dialogue session.
+Whenever the user asks about a PIN code or its location/taluk/district/branch, always provide the exact District, Taluk/Tehsil, Postal Division, and an itemized breakdown of all Sub-Offices (SO) and Branch Offices (BO) under that PIN code.
 When the user asks follow-up questions (such as 'when will it reach?', 'minimum amount?', 'how to apply?', 'what if 2kg?', 'how to withdraw early?'), answer specifically for the exact scheme, consignment, or service previously discussed without asking them to repeat details.
-Format your response in 2 to 4 concise, informative bullet points.
+Format your response in clear, informative bullet points.
 {location_str}
 {detected_pin_context}
 

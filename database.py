@@ -83,15 +83,15 @@ def search_pincode(query: str) -> list[dict]:
     try:
         if query_str.isdigit() and len(query_str) == 6:
             cursor.execute("""
-            SELECT pincode, office_name, office_type, delivery_status, division, district, state, circle
+            SELECT pincode, office_name, office_type, delivery_status, taluk, division, district, region, state, circle
             FROM pincodes WHERE pincode = ?
             """, (query_str,))
         else:
             q_like = f"%{query_str.lower()}%"
             cursor.execute("""
-            SELECT pincode, office_name, office_type, delivery_status, division, district, state, circle
-            FROM pincodes WHERE lower(office_name) LIKE ? OR lower(district) LIKE ? OR lower(state) LIKE ?
-            """, (q_like, q_like, q_like))
+            SELECT pincode, office_name, office_type, delivery_status, taluk, division, district, region, state, circle
+            FROM pincodes WHERE lower(office_name) LIKE ? OR lower(district) LIKE ? OR lower(state) LIKE ? OR lower(taluk) LIKE ?
+            """, (q_like, q_like, q_like, q_like))
 
         rows = cursor.fetchall()
         for r in rows:
@@ -100,8 +100,10 @@ def search_pincode(query: str) -> list[dict]:
                 "Pincode": r["pincode"],
                 "BranchType": r["office_type"] or "Sub Post Office",
                 "DeliveryStatus": r["delivery_status"] or "Delivery",
+                "Taluk": r["taluk"] or r["district"] or "",
                 "Division": r["division"] or "",
                 "District": r["district"] or "",
+                "Region": r["region"] or "Postal Region",
                 "State": r["state"] or "",
                 "Circle": r["circle"] or ""
             })
@@ -132,8 +134,10 @@ def search_pincode(query: str) -> list[dict]:
                         "Pincode": po.get("Pincode", query_str),
                         "BranchType": po.get("BranchType", "Sub Post Office"),
                         "DeliveryStatus": po.get("DeliveryStatus", "Delivery"),
+                        "Taluk": po.get("Taluk", po.get("Block", po.get("District", ""))),
                         "Division": po.get("Division", ""),
                         "District": po.get("District", ""),
+                        "Region": po.get("Region", "Postal Region"),
                         "State": po.get("State", ""),
                         "Circle": po.get("Circle", "")
                     })
@@ -149,8 +153,10 @@ def search_pincode(query: str) -> list[dict]:
             "Pincode": query_str,
             "BranchType": "Sub Post Office",
             "DeliveryStatus": "Delivery",
+            "Taluk": "Postal Sub-District",
             "Division": "Postal Division",
             "District": "India Postal Circle",
+            "Region": "Postal Region",
             "State": "India",
             "Circle": "India Post"
         }]
