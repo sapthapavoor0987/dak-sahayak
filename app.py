@@ -296,7 +296,7 @@ def api_transcribe():
     language = data.get("language", "English")
 
     if not audio_b64:
-        return jsonify({"error": "No audio payload provided"}), 400
+        return jsonify({"success": False, "error": "No audio payload provided"}), 400
 
     try:
         if "," in audio_b64:
@@ -305,9 +305,9 @@ def api_transcribe():
         audio_bytes = base64.b64decode(audio_b64)
         
         if not client:
-            return jsonify({"error": "Gemini API client not initialized"}), 500
+            return jsonify({"success": False, "error": "Gemini API client not initialized"}), 500
 
-        transcription_prompt = f"Transcribe this spoken question accurately into {language} text. Return ONLY the transcribed text with no extra commentary, quotes, or formatting."
+        transcription_prompt = f"Transcribe the following spoken voice audio accurately into plain text. Return ONLY the transcribed text. Do not add quotes, introductory remarks, or formatting."
         
         models_to_try = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"]
         transcribed_text = ""
@@ -328,13 +328,13 @@ def api_transcribe():
                 print(f"[-] Transcription model {m} error: {ex}")
 
         if not transcribed_text:
-            return jsonify({"error": "Failed to transcribe audio"}), 500
+            return jsonify({"success": False, "error": "Failed to transcribe audio"}), 500
 
-        return jsonify({"transcript": transcribed_text})
+        return jsonify({"success": True, "transcript": transcribed_text})
 
     except Exception as e:
         print(f"[-] Transcription API Exception: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/history", methods=["GET"])
 def api_history():

@@ -301,117 +301,26 @@ let mediaRecorder = null;
 let audioChunks = [];
 let mediaStream = null;
 let isRecordingVoice = false;
-let activeRecognition = null;
 
-function toggleVoiceInput() {
+async function toggleVoiceInput() {
     const micBtn = document.getElementById('micBtn');
     const input = document.getElementById('userInput') || document.getElementById('userMsg');
 
-    // 1. If actively recording, stop recording
-    if (isRecordingVoice) {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            try { mediaRecorder.stop(); } catch(e) {}
-        }
-        if (activeRecognition) {
-            try { activeRecognition.stop(); } catch(e) {}
-        }
-        isRecordingVoice = false;
-        if (micBtn) {
-            micBtn.classList.remove('recording');
-            micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-            micBtn.title = "Speak your question (Voice Input)";
-        }
+    // If currently recording, stop recorder
+    if (isRecordingVoice && mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
         return;
     }
 
-    // 2. Try Native Web Speech API first (instant, 0-latency live streaming in Chrome/Edge/Opera)
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-        try {
-            activeRecognition = new SpeechRecognition();
-            activeRecognition.continuous = false;
-            activeRecognition.interimResults = true;
-            activeRecognition.maxAlternatives = 1;
-            activeRecognition.lang = LANG_CODES[currentLanguage] || 'en-IN';
-
-            activeRecognition.onstart = () => {
-                isRecordingVoice = true;
-                if (micBtn) {
-                    micBtn.classList.add('recording');
-                    micBtn.innerHTML = '<i class="fa-solid fa-microphone-lines fa-bounce"></i>';
-                    micBtn.title = "Listening... Click mic to stop";
-                }
-                if (input) {
-                    input.value = '';
-                    input.placeholder = "Listening... Speak your question now 🎙️";
-                }
-            };
-
-            activeRecognition.onresult = (event) => {
-                let currentText = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    currentText += event.results[i][0].transcript;
-                }
-                if (input && currentText) {
-                    input.value = currentText;
-                }
-            };
-
-            activeRecognition.onerror = (event) => {
-                console.warn("Native SpeechRecognition note:", event.error);
-                isRecordingVoice = false;
-                if (micBtn) {
-                    micBtn.classList.remove('recording');
-                    micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-                }
-                if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-
-                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                    showToast("🔒 Please ensure Microphone is allowed in Windows Settings -> Privacy -> Microphone.");
-                } else if (event.error === 'no-speech') {
-                    showToast("ℹ️ No speech detected. Please click the microphone icon and speak clearly.");
-                } else {
-                    startMediaRecorderFallback(micBtn, input);
-                }
-            };
-
-            activeRecognition.onend = () => {
-                isRecordingVoice = false;
-                if (micBtn) {
-                    micBtn.classList.remove('recording');
-                    micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-                }
-                if (input) {
-                    input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-                    const spokenText = input.value.trim();
-                    if (spokenText.length > 0) {
-                        setTimeout(() => { handleSend(); }, 300);
-                    }
-                }
-            };
-
-            activeRecognition.start();
-            return; // Started native recognition cleanly
-
-        } catch (err) {
-            console.warn("SpeechRecognition start exception, falling back to MediaRecorder:", err);
-        }
-    }
-
-    // 3. Fallback: HTML5 MediaRecorder + Gemini Backend Audio Transcription
-    startMediaRecorderFallback(micBtn, input);
-}
-
-async function startMediaRecorderFallback(micBtn, input) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showToast("⚠️ Voice input is not supported in this browser.");
+        showToast("⚠️ Microphone recording is not supported in your browser.");
         return;
     }
 
     try {
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
         audioChunks = [];
-        
+
         let mimeType = 'audio/webm';
         if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
             mimeType = 'audio/webm;codecs=opus';
@@ -424,7 +333,9 @@ async function startMediaRecorderFallback(micBtn, input) {
         mediaRecorder = new MediaRecorder(mediaStream, { mimeType: mimeType });
 
         mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) audioChunks.push(e.data);
+            if (e.data && e.data.size > 0) {
+                audioChunks.push(e.data);
+            }
         };
 
         mediaRecorder.onstart = () => {
@@ -432,11 +343,11 @@ async function startMediaRecorderFallback(micBtn, input) {
             if (micBtn) {
                 micBtn.classList.add('recording');
                 micBtn.innerHTML = '<i class="fa-solid fa-square fa-fade"></i>';
-                micBtn.title = "Recording audio... Click mic to stop";
+                micBtn.title = "Click mic to stop and submit";
             }
             if (input) {
                 input.value = '';
-                input.placeholder = "Recording voice... Speak now, then click mic to send 🎙️";
+                input.placeholder = "Recording your voice... Click mic again to submit 🎙️";
             }
         };
 
@@ -445,21 +356,31 @@ async function startMediaRecorderFallback(micBtn, input) {
             if (micBtn) {
                 micBtn.classList.remove('recording');
                 micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                micBtn.title = "Speak your question (Voice Input)";
             }
+
+            // Stop all media tracks to release microphone
             if (mediaStream) {
                 mediaStream.getTracks().forEach(track => track.stop());
                 mediaStream = null;
             }
 
-            if (audioChunks.length === 0) return;
+            if (audioChunks.length === 0) {
+                if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
+                return;
+            }
 
             const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-            if (input) input.placeholder = "Transcribing voice with Gemini AI... ⚡";
+            if (input) {
+                input.placeholder = "Transcribing audio... ⚡";
+            }
 
+            // Convert audioBlob to Base64
             const reader = new FileReader();
             reader.readAsDataURL(audioBlob);
             reader.onloadend = async () => {
                 const base64Audio = reader.result;
+
                 try {
                     const response = await fetch('/api/transcribe', {
                         method: 'POST',
@@ -470,20 +391,25 @@ async function startMediaRecorderFallback(micBtn, input) {
                             language: currentLanguage
                         })
                     });
+
                     const data = await response.json();
-                    if (response.ok && data.transcript) {
+
+                    if (response.ok && (data.transcript || (data.success && data.transcript))) {
+                        const transcribedText = data.transcript;
                         if (input) {
-                            input.value = data.transcript;
+                            input.value = transcribedText;
                             input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
                         }
+                        // Execute handleSend() immediately
                         handleSend();
                     } else {
                         if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-                        showToast(`⚠️ Voice transcription note: ${data.error || 'Please speak again.'}`);
+                        showToast(`⚠️ Transcription failed: ${data.error || 'Please speak again.'}`);
                     }
                 } catch (err) {
+                    console.error("Transcription API Error:", err);
                     if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-                    showToast("⚠️ Network error while processing voice.");
+                    showToast("⚠️ Network error while sending voice data.");
                 }
             };
         };
@@ -491,14 +417,14 @@ async function startMediaRecorderFallback(micBtn, input) {
         mediaRecorder.start();
 
     } catch (err) {
-        console.error("MediaRecorder fallback error:", err);
+        console.error("Microphone Access Error:", err);
         isRecordingVoice = false;
         if (micBtn) {
             micBtn.classList.remove('recording');
             micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
         }
         if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-        showToast("🎙️ Please ensure Microphone is allowed in Windows Settings -> Privacy -> Microphone.");
+        showToast("⚠️ Microphone access failed. Please check microphone permissions in your browser & Windows Settings.");
     }
 }
 
