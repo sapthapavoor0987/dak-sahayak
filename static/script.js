@@ -35,7 +35,7 @@ function onLanguageChange(userInitiated = true) {
         currentLanguage = langSelect.value;
         localStorage.setItem('dak_selected_lang', currentLanguage);
     }
-    
+
     const input = document.getElementById('userInput') || document.getElementById('userMsg');
     if (input) {
         input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
@@ -60,7 +60,7 @@ function closeModal(id) {
 // Lightweight Markdown Parser Helper
 function parseMarkdown(text) {
     if (!text) return '';
-    
+
     let lines = text.split('\n');
     let htmlLines = [];
     let inList = false;
@@ -150,79 +150,6 @@ function sendQuickPrompt(text) {
     }
 }
 
-let conversationHistory = [];
-let currentUserPincode = "";
-let currentUserLocationDetails = "";
-
-async function detectUserLocation() {
-    const btn = document.getElementById('detectLocationBtn');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Locating...</span>';
-    }
-
-    if (!navigator.geolocation) {
-        alert("Geolocation is not supported by your browser.");
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> <span>📍 My PIN</span>';
-        }
-        return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-                const data = await res.json();
-                const address = data.address || {};
-                
-                const pincode = address.postcode || "Unknown PIN";
-                const suburb = address.suburb || address.neighbourhood || address.residential || address.village || "";
-                const city = address.city || address.town || address.county || address.state_district || "";
-                const state = address.state || "";
-
-                currentUserPincode = pincode;
-                currentUserLocationDetails = `${suburb ? suburb + ', ' : ''}${city}, ${state} (PIN: ${pincode})`;
-
-                // Hide welcome card if visible
-                const welcomeCard = document.getElementById('welcomeCard');
-                if (welcomeCard) welcomeCard.style.display = 'none';
-
-                const cardHtml = `📍 **Location Detected Successfully!**
-* **PIN Code:** **${pincode}**
-* **Area / Suburb:** ${suburb || 'N/A'}
-* **City / District:** ${city || 'N/A'}
-* **State:** ${state || 'N/A'}
-* *Your location PIN (${pincode}) is now attached for all post office searches.*`;
-
-                appendMessage('bot', cardHtml, [], null);
-
-            } catch (err) {
-                console.error("Geocoding Error:", err);
-                alert("Failed to fetch location address. Please try again.");
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> <span>📍 My PIN</span>';
-                }
-            }
-        },
-        (error) => {
-            console.error("Geolocation Position Error:", error);
-            alert("Unable to retrieve your location. Please check browser location permissions.");
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> <span>📍 My PIN</span>';
-            }
-        },
-        { timeout: 10000 }
-    );
-}
-
 // Handle User Input Submission
 async function handleSend(e) {
     if (e && e.preventDefault) e.preventDefault();
@@ -239,8 +166,7 @@ async function handleSend(e) {
     // Append User Message
     appendMessage('user', message);
     activeSessionChat.push({ sender: 'USER', message: message, time: new Date().toLocaleTimeString() });
-    conversationHistory.push({ role: 'user', content: message });
-    
+
     input.value = '';
     const sendBtn = document.getElementById('sendBtn');
     if (sendBtn) {
@@ -257,14 +183,11 @@ async function handleSend(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: message,
-                language: currentLanguage,
-                pincode: currentUserPincode,
-                user_location: currentUserLocationDetails,
-                history: conversationHistory.slice(-6)
+                language: currentLanguage
             })
         });
         const data = await response.json();
-        
+
         // Remove loading placeholder
         removeMessage(loadingMsgId);
 
@@ -273,7 +196,6 @@ async function handleSend(e) {
             const replyText = (rawText && rawText.trim()) ? rawText.trim() : "* India Post offers multiple Small Savings Schemes including PPF, SSA (Sukanya Samriddhi), NSC, and Post Office Savings Account.";
             appendMessage('bot', replyText, data.sources || [], data.log_id);
             activeSessionChat.push({ sender: 'DAK SAHAYAK', message: replyText, time: new Date().toLocaleTimeString() });
-            conversationHistory.push({ role: 'assistant', content: replyText });
         } else {
             appendMessage('bot', `⚠️ Error: ${data.error || 'Failed to process request.'}`);
         }
@@ -287,255 +209,10 @@ async function handleSend(e) {
     }
 }
 
-const LANG_CODES = {
-    'English': 'en-IN',
-    'Hindi': 'hi-IN',
-    'Kannada': 'kn-IN',
-    'Tamil': 'ta-IN',
-    'Telugu': 'te-IN',
-    'Marathi': 'mr-IN',
-    'Bengali': 'bn-IN'
-};
-
-let mediaRecorder = null;
-let audioChunks = [];
-let mediaStream = null;
-let isRecordingVoice = false;
-let recordingTimeout = null;
-
-async function toggleVoiceInput() {
-    const micBtn = document.getElementById('micBtn');
-    const input = document.getElementById('userInput') || document.getElementById('userMsg');
-
-    // If currently recording, stop recorder
-    if (isRecordingVoice && mediaRecorder && mediaRecorder.state !== 'inactive') {
-        if (recordingTimeout) clearTimeout(recordingTimeout);
-        mediaRecorder.stop();
-        return;
-    }
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showToast("⚠️ Microphone recording is not supported in your browser.");
-        return;
-    }
-
-    try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-        audioChunks = [];
-
-        let mimeType = 'audio/webm';
-        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-            mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-            mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/wav')) {
-            mimeType = 'audio/wav';
-        }
-
-        mediaRecorder = new MediaRecorder(mediaStream, { mimeType: mimeType });
-
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) {
-                audioChunks.push(e.data);
-            }
-        };
-
-        mediaRecorder.onstart = () => {
-            isRecordingVoice = true;
-            if (micBtn) {
-                micBtn.classList.add('recording');
-                micBtn.innerHTML = '<i class="fa-solid fa-square fa-fade"></i>';
-                micBtn.title = "Click mic to stop and submit";
-            }
-            if (input) {
-                input.value = '';
-                input.placeholder = "Recording your voice... Click mic again to submit 🎙️";
-            }
-
-            // Auto-stop recording after 10 seconds if user doesn't click stop manually
-            if (recordingTimeout) clearTimeout(recordingTimeout);
-            recordingTimeout = setTimeout(() => {
-                if (isRecordingVoice && mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                }
-            }, 10000);
-        };
-
-        mediaRecorder.onstop = async () => {
-            if (recordingTimeout) clearTimeout(recordingTimeout);
-            isRecordingVoice = false;
-            if (micBtn) {
-                micBtn.classList.remove('recording');
-                micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-                micBtn.title = "Speak your question (Voice Input)";
-            }
-
-            // Stop all media tracks to release microphone
-            if (mediaStream) {
-                mediaStream.getTracks().forEach(track => track.stop());
-                mediaStream = null;
-            }
-
-            if (audioChunks.length === 0) {
-                if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-                return;
-            }
-
-            const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-            if (input) {
-                input.placeholder = "Transcribing audio... ⚡";
-            }
-
-            // Convert audioBlob to Base64
-            const reader = new FileReader();
-            reader.readAsDataURL(audioBlob);
-            reader.onloadend = async () => {
-                const base64Audio = reader.result;
-
-                try {
-                    const response = await fetch('/api/transcribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            audio: base64Audio,
-                            mime_type: audioBlob.type || 'audio/webm',
-                            language: currentLanguage
-                        })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok && (data.transcript || (data.success && data.transcript))) {
-                        const transcribedText = data.transcript;
-                        if (input) {
-                            input.value = transcribedText;
-                            input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-                        }
-                        // Execute handleSend() immediately
-                        handleSend();
-                    } else {
-                        if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-                        showToast(`⚠️ Transcription failed: ${data.error || 'Please speak again.'}`);
-                    }
-                } catch (err) {
-                    console.error("Transcription API Error:", err);
-                    if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-                    showToast("⚠️ Network error while sending voice data.");
-                }
-            };
-        };
-
-        mediaRecorder.start();
-
-    } catch (err) {
-        console.error("Microphone Access Error:", err);
-        isRecordingVoice = false;
-        if (micBtn) {
-            micBtn.classList.remove('recording');
-            micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-        }
-        if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
-        showToast("⚠️ Microphone access failed. Please check microphone permissions in your browser & Windows Settings.");
-    }
-}
-
-// Toast Notification Helper
-function showToast(message) {
-    let toast = document.getElementById('dakToast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'dakToast';
-        toast.style.cssText = `
-            position: fixed;
-            bottom: 85px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #323232;
-            color: #FFFFFF;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 0.88rem;
-            z-index: 10000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            transition: opacity 0.3s ease;
-        `;
-        document.body.appendChild(toast);
-    }
-    toast.innerText = message;
-    toast.style.opacity = '1';
-    toast.style.display = 'block';
-
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => { toast.style.display = 'none'; }, 300);
-    }, 4000);
-}
-
-// Text-To-Speech (TTS)
-let activeSpeakBtn = null;
-
-function toggleSpeakText(btnEl, msgId) {
-    const msgElement = document.getElementById(msgId);
-    if (!msgElement) return;
-
-    if (!('speechSynthesis' in window)) {
-        alert("Text-to-speech is not supported in your browser.");
-        return;
-    }
-
-    // If currently speaking this button, stop it
-    if (window.speechSynthesis.speaking && activeSpeakBtn === btnEl) {
-        window.speechSynthesis.cancel();
-        btnEl.classList.remove('speaking');
-        btnEl.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>Read Aloud</span>';
-        activeSpeakBtn = null;
-        return;
-    }
-
-    // Stop any ongoing speech
-    window.speechSynthesis.cancel();
-    if (activeSpeakBtn) {
-        activeSpeakBtn.classList.remove('speaking');
-        activeSpeakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>Read Aloud</span>';
-    }
-
-    // Extract raw text content without HTML tags
-    const textContent = msgElement.innerText || msgElement.textContent;
-    const cleanText = textContent.replace(/Was this helpful\?.*$/i, '').replace(/Read Aloud.*$/i, '').trim();
-
-    if (!cleanText) return;
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = LANG_CODES[currentLanguage] || 'en-IN';
-    utterance.rate = 1.0;
-
-    utterance.onstart = () => {
-        btnEl.classList.add('speaking');
-        btnEl.innerHTML = '<i class="fa-solid fa-volume-xmark"></i> <span>Stop</span>';
-        activeSpeakBtn = btnEl;
-    };
-
-    utterance.onend = () => {
-        btnEl.classList.remove('speaking');
-        btnEl.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>Read Aloud</span>';
-        activeSpeakBtn = null;
-    };
-
-    utterance.onerror = () => {
-        btnEl.classList.remove('speaking');
-        btnEl.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>Read Aloud</span>';
-        activeSpeakBtn = null;
-    };
-
-    window.speechSynthesis.speak(utterance);
-}
-
 // Append Chat Message to UI
 function appendMessage(sender, text, sources = [], logId = null) {
     const chatThread = document.getElementById('chatThread');
     const msgWrapper = document.createElement('div');
-    const msgId = 'msg-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
-    msgWrapper.id = msgId;
     msgWrapper.className = `message-wrapper ${sender}`;
 
     const avatar = document.createElement('div');
@@ -551,32 +228,20 @@ function appendMessage(sender, text, sources = [], logId = null) {
     contentDiv.innerHTML = parseMarkdown(text || "No response received");
     bubble.appendChild(contentDiv);
 
-    // Append feedback and TTS actions for Bot responses
-    if (sender === 'bot') {
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'feedback-actions';
-        
-        let actionsHtml = `
-            <button class="speak-btn" onclick="toggleSpeakText(this, '${msgId}')" title="Read aloud" aria-label="Read answer aloud">
-                <i class="fa-solid fa-volume-high"></i> <span>Read Aloud</span>
+    // Append feedback buttons for Bot responses
+    if (sender === 'bot' && logId) {
+        const feedbackDiv = document.createElement('div');
+        feedbackDiv.className = 'feedback-actions';
+        feedbackDiv.innerHTML = `
+            <span>Was this helpful?</span>
+            <button class="feedback-btn" id="pos-${logId}" onclick="submitFeedback(${logId}, 'positive')">
+                <i class="fa-solid fa-thumbs-up"></i> Yes
+            </button>
+            <button class="feedback-btn" id="neg-${logId}" onclick="submitFeedback(${logId}, 'negative')">
+                <i class="fa-solid fa-thumbs-down"></i> No
             </button>
         `;
-
-        if (logId) {
-            actionsHtml += `
-                <span>|</span>
-                <span>Was this helpful?</span>
-                <button class="feedback-btn" id="pos-${logId}" onclick="submitFeedback(${logId}, 'positive')">
-                    <i class="fa-solid fa-thumbs-up"></i> Yes
-                </button>
-                <button class="feedback-btn" id="neg-${logId}" onclick="submitFeedback(${logId}, 'negative')">
-                    <i class="fa-solid fa-thumbs-down"></i> No
-                </button>
-            `;
-        }
-
-        actionsDiv.innerHTML = actionsHtml;
-        bubble.appendChild(actionsDiv);
+        bubble.appendChild(feedbackDiv);
     }
 
     msgWrapper.appendChild(avatar);
@@ -624,8 +289,6 @@ function removeMessage(id) {
 }
 
 function clearChat() {
-    conversationHistory = [];
-    activeSessionChat = [];
     const chatThread = document.getElementById('chatThread');
     chatThread.innerHTML = `
         <div class="welcome-card" id="welcomeCard">
@@ -642,6 +305,7 @@ function clearChat() {
             </div>
         </div>
     `;
+    activeSessionChat = [];
 }
 
 // Feedback submission
@@ -777,7 +441,7 @@ async function loadHistoryModal() {
         if (resp.ok && data.history && data.history.length > 0) {
             let listHTML = '';
             data.history.forEach(item => {
-                const feedbackBadge = item.feedback 
+                const feedbackBadge = item.feedback
                     ? `<span class="source-tag"><i class="fa-solid fa-thumbs-${item.feedback === 'positive' ? 'up' : 'down'}"></i> ${item.feedback}</span>`
                     : '';
                 listHTML += `
@@ -790,6 +454,17 @@ async function loadHistoryModal() {
                         <div class="hist-response">${parseMarkdown(item.bot_response)}</div>
                     </div>
                 `;
+            });
+            container.innerHTML = listHTML;
+        } else {
+            container.innerHTML = '<p class="placeholder-text">No query history logged yet.</p>';
+        }
+    } catch (err) {
+        container.innerHTML = '<p class="placeholder-text">Failed to load history logs.</p>';
+    }
+}
+                    </div >
+    `;
             });
             container.innerHTML = listHTML;
         } else {

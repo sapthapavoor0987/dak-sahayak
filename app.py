@@ -1,7 +1,6 @@
 import os
 import re
 import math
-import base64
 import requests
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
@@ -137,9 +136,6 @@ def api_chat():
     data = request.get_json() or {}
     user_message = data.get("message", "").strip()
     language = data.get("language", "English").strip()
-    user_pincode = data.get("pincode", "").strip()
-    user_location = data.get("user_location", "").strip()
-    history = data.get("history", [])
 
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
@@ -176,28 +172,8 @@ def api_chat():
             "category": "Consignment Tracking"
         })
 
-    # 3. Contextual Query Building for Multi-Turn Follow-Ups (Universal Across All Services)
-    rag_search_query = user_message
-    history_context = ""
-    if history:
-        followup_triggers = ["that", "this", "it", "facility", "avail", "apply", "open", "document", "process", "rule", "procedure", "how to", "how can i", "cost", "tariff", "rate", "limit", "time", "sla", "documents", "requirements", "eligibility", "form", "claim", "status"]
-        msg_lower = user_message.lower()
-        is_followup = any(trigger in msg_lower for trigger in followup_triggers) or len(user_message.split()) <= 8
-
-        if is_followup:
-            last_turn_text = " ".join([h.get("content", "") for h in history[-2:]])
-            clean_last_turn = re.sub(r'\b(facility|avail|how|can|i|for|that|this|what|are|is|the|please|tell|me|about|which|when|where)\b', ' ', last_turn_text, flags=re.IGNORECASE)
-            rag_search_query = f"{clean_last_turn} {user_message}"
-        
-        recent_turns = history[-6:]
-        history_lines = []
-        for item in recent_turns:
-            role_name = "User" if item.get("role") in ["user", "human"] else "Assistant"
-            history_lines.append(f"{role_name}: {item.get('content', '')}")
-        history_context = "\nPrevious conversation:\n" + "\n".join(history_lines) + "\n"
-
-    # 4. Dynamic Context Retrieval via RAG
-    retrieved_chunks = retrieve_top_chunks(rag_search_query, top_k=5)
+    # 3. Dynamic Context Retrieval via RAG
+    retrieved_chunks = retrieve_top_chunks(user_message, top_k=5)
     
     context_text = ""
     sources_list = []
@@ -206,22 +182,13 @@ def api_chat():
         context_text = "\n".join([b for b in context_blocks if b])
         sources_list = retrieved_chunks
 
-    loc_info = f"\nUser Location Context: {user_location}" if user_location else (f"\nUser PIN Code: {user_pincode}" if user_pincode else "")
-
-    # 5. Direct Gemini API Call with Strict Relevance & Continuity Instructions
-    system_prompt = f"""You are Dak Sahayak, the official India Post AI assistant. Respond strictly and fluently in {language}.
-
-STRICT RELEVANCE & CONTINUITY MANDATE:
-1. 100% QUERY RELEVANCE: Answer ONLY what the user asked. Every single bullet point must directly answer the user's specific query without off-topic tangents, unrelated schemes, or unsolicited advice.
-2. EXPLICIT SCHEME ANCHORING: For any follow-up question (e.g. "how to avail", "how to apply", "what are the documents", "rules for that", "eligibility"), anchor your response directly to the specific scheme(s) or service(s) previously discussed.
-3. MULTI-SERVICE FOLLOW-UPS: If the previous turn listed multiple schemes or services, provide a dedicated bullet point for EACH of those specific items explaining how to proceed for that exact item.
-4. ZERO GENERIC BOILERPLATE: Always provide precise, actionable details (exact form numbers like Form SB-3, exact documents like Aadhaar/PAN/Birth Certificate, exact limits and interest rates). Never give generic filler text.
-5. Format in 2 to 4 clean, structured bullet points."""
+    # 4. Direct Gemini API Call with Multilingual Instruction
+    system_prompt = f"You are Dak Sahayak, an India Post AI assistant. Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali, etc.), generate natural, accurate native script text while keeping specific terms like Speed Post, PPF, SSA, PIN code easy to understand. Format the answer concisely in 2 to 4 clean bullet points."
 
     prompt = f"""Official India Post Context:
-{context_text}{loc_info}
-{history_context}
-Current Question: {user_message}
+{context_text}
+
+User Question: {user_message}
 Requested Output Language: {language}"""
 
     reply_text = ""
@@ -287,54 +254,6 @@ Requested Output Language: {language}"""
         "log_id": log_id,
         "category": category
     })
-
-@app.route("/api/transcribe", methods=["POST"])
-def api_transcribe():
-    data = request.get_json() or {}
-    audio_b64 = data.get("audio", "")
-    mime_type = data.get("mime_type", "audio/webm")
-    language = data.get("language", "English")
-
-    if not audio_b64:
-        return jsonify({"success": False, "error": "No audio payload provided"}), 400
-
-    try:
-        if "," in audio_b64:
-            audio_b64 = audio_b64.split(",")[-1]
-            
-        audio_bytes = base64.b64decode(audio_b64)
-        
-        if not client:
-            return jsonify({"success": False, "error": "Gemini API client not initialized"}), 500
-
-        transcription_prompt = f"Transcribe the following spoken voice audio accurately into plain text. Return ONLY the transcribed text. Do not add quotes, introductory remarks, or formatting."
-        
-        models_to_try = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"]
-        transcribed_text = ""
-        
-        for m in models_to_try:
-            try:
-                response = client.models.generate_content(
-                    model=m,
-                    contents=[
-                        types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
-                        transcription_prompt
-                    ]
-                )
-                if response and response.text:
-                    transcribed_text = response.text.strip()
-                    break
-            except Exception as ex:
-                print(f"[-] Transcription model {m} error: {ex}")
-
-        if not transcribed_text:
-            return jsonify({"success": False, "error": "Failed to transcribe audio"}), 500
-
-        return jsonify({"success": True, "transcript": transcribed_text})
-
-    except Exception as e:
-        print(f"[-] Transcription API Exception: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/history", methods=["GET"])
 def api_history():
