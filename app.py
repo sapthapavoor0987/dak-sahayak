@@ -277,7 +277,10 @@ def api_feedback():
 def api_transcribe():
     data = request.get_json() or {}
     audio_b64 = data.get("audio", "")
-    mime_type = data.get("mime_type", "audio/webm")
+    raw_mime = data.get("mime_type", "audio/webm")
+    mime_type = raw_mime.split(";")[0].strip() if raw_mime else "audio/webm"
+    if not mime_type or "audio" not in mime_type:
+        mime_type = "audio/webm"
 
     if not audio_b64:
         return jsonify({"success": False, "error": "No audio payload provided"}), 400
@@ -291,10 +294,20 @@ def api_transcribe():
         if not client:
             return jsonify({"success": False, "error": "Gemini API client not initialized"}), 500
 
-        transcription_prompt = "Transcribe this spoken question accurately into text. Return ONLY the transcribed text. Do not add quotes or any other explanation."
+        transcription_prompt = "Transcribe the spoken voice audio accurately into text. Return ONLY the transcribed text with no quotes, commentary, or formatting."
 
-        models_to_try = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"]
+        models_to_try = [
+            "gemini-2.5-flash-lite",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-2.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash"
+        ]
         transcribed_text = ""
+        quota_exceeded = False
 
         for m in models_to_try:
             try:
@@ -309,10 +322,15 @@ def api_transcribe():
                     transcribed_text = response.text.strip()
                     break
             except Exception as ex:
-                print(f"[-] Transcription model {m} error: {ex}")
+                err_str = str(ex)
+                print(f"[-] Transcription model {m} error: {err_str}")
+                if "RESOURCE_EXHAUSTED" in err_str or "429" in err_str:
+                    quota_exceeded = True
 
         if not transcribed_text:
-            return jsonify({"success": False, "error": "Failed to transcribe audio"}), 500
+            if quota_exceeded:
+                return jsonify({"success": False, "error": "Gemini API rate limit reached. Please type your query in the text box."}), 429
+            return jsonify({"success": False, "error": "Unable to transcribe audio. Please speak clearly into your microphone."}), 500
 
         return jsonify({"success": True, "transcript": transcribed_text})
 

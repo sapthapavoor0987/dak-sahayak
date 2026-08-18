@@ -542,15 +542,18 @@ async function toggleVoiceInput() {
                 mediaStream = null;
             }
 
-            if (audioChunks.length === 0) {
+            const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+            if (audioBlob.size < 500) {
                 if (input) input.placeholder = PLACEHOLDERS[currentLanguage] || PLACEHOLDERS['English'];
+                showToast("ℹ️ Audio recording too short. Please hold or speak clearly into your microphone.");
                 return;
             }
 
-            const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
             if (input) {
                 input.placeholder = "Transcribing audio... ⚡";
             }
+
+            const cleanMime = (audioBlob.type || mediaRecorder.mimeType || 'audio/webm').split(';')[0].trim();
 
             const reader = new FileReader();
             reader.readAsDataURL(audioBlob);
@@ -563,7 +566,7 @@ async function toggleVoiceInput() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             audio: base64Audio,
-                            mime_type: audioBlob.type || 'audio/webm',
+                            mime_type: cleanMime,
                             language: currentLanguage
                         })
                     });
