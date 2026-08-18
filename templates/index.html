@@ -95,6 +95,9 @@
                     <form id="chatForm" onsubmit="handleSend(event)" class="chat-form">
                         <div class="input-wrapper">
                             <input type="text" id="userInput" placeholder="Ask Dak Sahayak or enter Consignment No. (e.g. EU123456789IN)..." autocomplete="off" required>
+                            <button type="button" id="micBtn" class="action-icon-btn voice-btn" title="Speak your question (Voice Input)" aria-label="Start Voice Input" onclick="toggleVoiceInput()">
+                                <i class="fa-solid fa-microphone"></i>
+                            </button>
                             <button type="button" class="action-icon-btn" title="Clear Chat" onclick="clearChat()">
                                 <i class="fa-solid fa-trash-can"></i>
                             </button>

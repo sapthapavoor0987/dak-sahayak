@@ -1,6 +1,7 @@
 import os
 import re
 import math
+import base64
 import requests
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
@@ -272,6 +273,53 @@ def api_feedback():
     success = update_feedback(log_id, feedback)
     return jsonify({"success": success, "log_id": log_id, "feedback": feedback})
 
+@app.route("/api/transcribe", methods=["POST"])
+def api_transcribe():
+    data = request.get_json() or {}
+    audio_b64 = data.get("audio", "")
+    mime_type = data.get("mime_type", "audio/webm")
+
+    if not audio_b64:
+        return jsonify({"success": False, "error": "No audio payload provided"}), 400
+
+    try:
+        if "," in audio_b64:
+            audio_b64 = audio_b64.split(",")[-1]
+
+        audio_bytes = base64.b64decode(audio_b64)
+
+        if not client:
+            return jsonify({"success": False, "error": "Gemini API client not initialized"}), 500
+
+        transcription_prompt = "Transcribe this spoken question accurately into text. Return ONLY the transcribed text. Do not add quotes or any other explanation."
+
+        models_to_try = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"]
+        transcribed_text = ""
+
+        for m in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=m,
+                    contents=[
+                        types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+                        transcription_prompt
+                    ]
+                )
+                if response and response.text:
+                    transcribed_text = response.text.strip()
+                    break
+            except Exception as ex:
+                print(f"[-] Transcription model {m} error: {ex}")
+
+        if not transcribed_text:
+            return jsonify({"success": False, "error": "Failed to transcribe audio"}), 500
+
+        return jsonify({"success": True, "transcript": transcribed_text})
+
+    except Exception as e:
+        print(f"[-] Transcription API Exception: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route("/api/calculator", methods=["POST"])
 def api_calculator():
     data = request.get_json() or {}
@@ -343,4 +391,4 @@ def api_pincode(query):
     return jsonify({"status": "Error", "message": f"No post office found for '{query_str}'"}), 404
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=False)
