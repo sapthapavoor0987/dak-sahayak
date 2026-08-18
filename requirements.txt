@@ -1,0 +1,8 @@
+Flask==3.0.3
+flask-cors==4.0.1
+google-genai
+pypdf==6.16.1
+beautifulsoup4
+requests
+scikit-learn
+python-dotenv

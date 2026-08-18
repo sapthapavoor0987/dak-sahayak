@@ -1,0 +1,75 @@
+Source URL: https://www.indiapost.gov.in (Official India Post Master Reference Guide)
+
+INDIA POST MASTER SCHEMES, SERVICES, PLI, IPPB, PARCELS & GRIEVANCE DIRECTORY
+
+1. Small Savings Schemes & POSB (Post Office Savings Bank):
+- Post Office Savings Account (SB): Interest 4.0% p.a. (paid annually). Min Deposit: Rs 500, Max: No limit. Ongoing maturity. Min balance Rs 500. Interest up to Rs 10,000 exempt under Sec 80TTA.
+- Recurring Deposit (RD): Interest 6.7% p.a. (Quarterly compounded). Min Deposit: Rs 100/mo (multiples of Rs 10), Max: No limit. Maturity: 5 Years (60 months). Loan up to 50% after 1 yr; Premature closure permitted after 3 yrs.
+- Time Deposit (TD / FD): Interest 1 Yr (6.9%), 2 Yr (7.0%), 3 Yr (7.1%), 5 Yr (7.5%). Min Deposit: Rs 1,000, Max: No limit. Tenure: 1, 2, 3, or 5 Years. 5-Year TD qualifies for Sec 80C rebate; Premature closure allowed after 6 months.
+- Monthly Income Scheme (MIS): Interest 7.4% p.a. (Paid monthly). Min Deposit: Rs 1,000, Max: Single Rs 9 Lakh, Joint Rs 15 Lakh. Maturity: 5 Years. Monthly interest payout; 1% to 2% deduction on premature withdrawal.
+- Senior Citizen Savings Scheme (SCSS): Interest 8.2% p.a. (Paid quarterly). Min Deposit: Rs 1,000, Max: Rs 30 Lakh. Maturity: 5 Years (Extendable by 3 yrs). Age 60+ (or 55+ for VRS/retired defense); Qualifies for Sec 80C.
+- Public Provident Fund (PPF): Interest 7.1% p.a. (Compounded annually). Min Deposit: Rs 500/FY, Max: Rs 1.5 Lakh/FY. Maturity: 15 Years (Extendable in 5-yr blocks). EEE Status (Exempt deposit, interest, & maturity); Loans from 3rd yr.
+- Sukanya Samriddhi Account (SSA): Interest 8.2% p.a. (Compounded annually). Min Deposit: Rs 250/FY, Max: Rs 1.5 Lakh/FY. Maturity: 21 Years (or upon marriage after 18). For girl child up to age 10; Max 2 girls/family (3 for twins/triplets); EEE Tax Free.
+- Mahila Samman Savings Certificate (MSSC): Interest 7.5% p.a. (Compounded quarterly, paid at maturity). Min Deposit: Rs 1,000, Max: Rs 2 Lakh. Tenure: 2 Years. Partial withdrawal up to 40% allowed after 1 year. Premature closure after 6 months (with 2% penalty). Exclusive for women/minor girls.
+- National Savings Certificate (NSC VIII Issue): Interest 7.7% p.a. (Compounded annually, paid at maturity). Min Deposit: Rs 1,000, Max: No limit. Maturity: 5 Years. Qualifies for Sec 80C; Can be pledged to banks as loan collateral.
+- Kisan Vikas Patra (KVP): Interest 7.5% p.a. (Compounded annually). Min Deposit: Rs 1,000, Max: No limit. Maturity: 115 Months (9 yrs, 7 mos). Doubles the invested amount at maturity; Transferable across persons/branches.
+- TDS & Tax Exemption Thresholds: TDS applies under Section 194A if total POSB interest across schemes exceeds Rs 40,000/year (Rs 50,000/year for senior citizens). Submission of Form 15G or Form 15H prevents TDS deduction if eligible.
+- Account Dormancy / Silent Accounts: Account becomes silent/dormant if no financial transaction occurs for 3 continuous financial years. Revived by submitting fresh KYC documents at the home branch.
+- Mandatory Nomination Rules: Nomination is mandatory at the time of opening accounts and PLI policies. Up to 4 nominees can be assigned with defined percentage shares.
+- KYC Documents Required: Valid Aadhaar Card, PAN Card (mandatory for deposits over Rs 50,000), and 2 passport-size photographs.
+
+2. Postal Life Insurance (PLI) vs. Rural PLI (RPLI):
+- Eligibility: PLI covers Govt/PSU/defense/bank staff, IT employees, and certified professionals (engineers, doctors, CAs, lawyers); RPLI is available to all rural residents and village public.
+- Sum Assured Limits: PLI: Rs 20,000 to Rs 50 Lakh | RPLI: Rs 10,000 to Rs 10 Lakh.
+- Tax Benefit: Premiums qualify for tax deductions under Section 80C; payouts exempt under Section 10(10D).
+- Insurance Plans & Annual Bonus Rates (Per Rs 1,000 Sum Assured per Year):
+  * Suraksha / Gram Suraksha (Whole Life Assurance): PLI Bonus Rs 76 | RPLI Bonus Rs 60. Payout at age 80 or to nominee on earlier death; Loan available after 4 yrs.
+  * Santosh / Gram Santosh (Endowment Assurance): PLI Bonus Rs 52 | RPLI Bonus Rs 48. Matures at age 35, 40, 45, 50, 55, 58, or 60; Loan available after 3 yrs.
+  * Suvidha / Gram Suvidha (Convertible Whole Life): PLI Bonus Rs 76 (converts to Rs 52) | RPLI Bonus Rs 60 (converts to Rs 48). Option to convert to Endowment after 5 years of policy inception.
+  * Sumangal / Gram Sumangal (Anticipated Endowment / Money Back): PLI Bonus Rs 48 | RPLI Bonus Rs 45. 15 or 20-yr terms; Periodic survival payouts (20% every few years) + balance at end.
+  * Yugal Suraksha (Joint Life Spouse Cover): PLI Bonus Rs 52. Single premium covers both husband and wife; Minimum 1 spouse must be eligible for PLI.
+  * Bal Jeevan Bima (Children Policy): PLI Bonus Rs 52 | RPLI Bonus Rs 48. Covers up to 2 children aged 5-20 yrs; Max SA Rs 1 Lakh (Parent age <= 45).
+
+3. IPPB (India Post Payments Bank) & Aadhaar Services:
+- Account Types: Digital Savings Account (instant OTP open), Regular Savings Account (zero minimum balance limit), and Premium Savings Account.
+- Doorstep Banking (DSB): Postman / GDS visits home with micro-ATM for cash withdrawal, cash deposits, and bill payments (Nominal service charge Rs 20+GST per visit).
+- AePS (Aadhaar Enabled Payment System): Interoperable cash withdrawal up to Rs 10,000/day from any bank account using Aadhaar biometric authentication.
+- Aadhaar Counter Services:
+  * Free Services: Mandatory Biometric Updation (MBU) for children (ages 5 and 15), fresh Aadhaar enrolments.
+  * Paid Services: Demographic updates (Mobile, Name, Address, DoB update: Rs 50), Biometric update for adults (Rs 100).
+- Direct Benefit Transfer (DBT) Seeding: Seeding Aadhaar with IPPB/POSB via NPCI mapper to receive PM-KISAN, LPG subsidies, and scholarships.
+- Doorstep Life Certificate (Jeevan Pramaan): Biometric digital life certificate generation for central, state, and defense pensioners via IPPB micro-ATMs without visiting a bank branch.
+
+4. Operational Mail Tracking, Storage & Delivery Rules:
+- Tracking Status Terms Explained:
+  * Item Bagged: Article has been bundled into a dispatch mail bag for transit.
+  * NSH (National Sorting Hub): Automated central facility where mail is sorted automatically by route and destination.
+  * Out for Delivery: Parcel/article handed over to the local beat postman for doorstep delivery today.
+- Missed Deliveries & Storage Rules: Standard articles and Speed Post are retained at the local delivery post office for 7 days before being marked 'Return to Sender' (RTS) if recipient is not home.
+- Address Correction & Redirection: No online address change is permitted in-transit. A written redirection application must be submitted to the destination delivery post office.
+- 24/48 Speed Post Metro Guarantee: Guaranteed next-day (24-hour) delivery across 6 major metros (Delhi, Mumbai, Bengaluru, Chennai, Kolkata, Hyderabad) backed by OTP delivery and money-back postage guarantee.
+- Domestic Speed Post Limits: Max Weight 35 kg. Size Limits: Length <= 1.5 m; Length + (2 x Girth) <= 3.0 m. Live tracking via 13-digit alphanumeric ID. Delay compensation: Equal to Speed Post charge.
+- Registered Post: Max Weight 2 kg (Letter) / 20 kg (Parcel). Size Limits: Length <= 60 cm; Sum of L+W+H <= 90 cm. Loss compensation: Up to Rs 100 for inland letter.
+- Blind Literature: Max Weight 7 kg. Braille writing/papers. 100% Free Postage (No postage, registration, or airmail surcharge).
+
+5. International Mail, Export Facilitation & Customs Procedures:
+- International Tracked Packet Service (ITPS): Economical e-commerce package service up to 2 kg for select countries (USA, UK, Australia, Europe) with online tracking.
+- International Speed Post (EMS): Fast delivery up to 35 kg across 100+ countries with priority customs clearance.
+- Customs Declaration Forms:
+  * CN 22: Used for articles and packets with declared value under 300 SDR (approx. Rs 30,000).
+  * CN 23: Used for commercial packages and parcels exceeding 300 SDR (requires commercial invoice and HS tariff codes).
+- Dak Ghar Niryat Kendra (DNK): One-stop export facilitation nodes set up at Head and Sub Post Offices for MSMEs and rural artisans. Direct ICEGATE customs integration for generating electronic Postal Bill of Export (PBE-III). IEC registration assistance, HS code mapping, and packaging. ONDC partnership for micro-sellers.
+
+6. Modernization, DIGIPIN & APT 2.0:
+- DIGIPIN (Digital Postal Index Number): India Post's open-source 10-character alphanumeric geo-coded addressing system dividing India into 4m x 4m grids for precise GPS-level deliveries.
+- APT 2.0 (Advanced Postal Technology): Unified cloud software platform powering counter operations with direct dynamic UPI QR payments, GPS-enabled postman delivery mapping, and real-time photo-proof delivery logs.
+- Post Office Act, 2023: Repeals the 125-year-old Indian Post Office Act of 1898. Eliminates the British-era exclusive government monopoly on carrying letters, allowing private courier networks to operate. Retains exclusive statutory privilege over official physical/digital postage stamps.
+
+7. Citizen Charter, Grievance Escalation & Branch Services:
+- Service Delivery Timelines (Citizen Charter SLA):
+  * Speed Post: Local (1-2 days), Metro-to-Metro (1-3 days), Same State (1-4 days), Rest of India (4-5 days).
+  * Registered Letters/Parcels: Metro-to-Metro (3-5 days), Rest of India (5-7 days).
+- Grievance Redressal Mechanism:
+  * Level 1: File ticket online at indiapost.gov.in / Toll-free 1800-266-6868 (Resolution SLA: 30 days).
+  * Level 2: Senior Superintendent of Post Offices (SSPO) / Divisional Head.
+  * Level 3: Chief Postmaster General (CPMG) of the Postal Circle / CPGRAMS central portal.

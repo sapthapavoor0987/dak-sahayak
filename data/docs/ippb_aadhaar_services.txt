@@ -1,0 +1,21 @@
+Source URL: https://www.ippbonline.com (Official Reference)
+
+INDIA POST PAYMENTS BANK (IPPB) & AADHAAR SERVICES OFFICIAL GUIDE
+
+1. IPPB Digital Zero-Balance Savings Account:
+- Opening Account: Can be opened instantly via paperless digital onboarding using Aadhaar and PAN through the IPPB Mobile Banking App or at post offices / via Postman using micro-ATM.
+- Account Features: Zero balance account, no minimum monthly balance required. Offers 2.0% p.a. interest (paid quarterly). Free Virtual Debit Card for online transactions.
+- Limits: Maximum end-of-day balance limit is Rs. 2 Lakhs as per RBI guidelines.
+
+2. Doorstep Banking (DSB) Services:
+- How it works: Customers can request banking services at their doorstep via the Postinfo app, IPPB website, or by calling 155299 / 1800 180 7980. Postmen or Gramin Dak Sevaks (GDS) visit the customer's house equipped with biometric micro-ATMs.
+- Services Offered: Cash withdrawal/deposit, Aadhaar mobile number update, Digital Life Certificate (DLC) generation, bill payments, money transfers, and IPPB account opening.
+- Service Charges: Rs. 20 + GST per successful doorstep visit for financial services.
+
+3. Aadhaar Enrolment & Update Services at Post Offices:
+- Services Available: Fresh Aadhaar enrolment (Free of cost), Mobile Number update in Aadhaar (Rs. 50), Address update/Demographic updates (Rs. 50), Child mandatory biometric update for children aged 5 and 15 years (Free of cost), and Child Aadhaar enrolment (CELC - Child Enrolment Lite Client) for 0-5 years at doorstep.
+- Passport Seva (POPSK): Post Office Passport Seva Kendras (POPSK) operate in designated Head Post Offices across India to process fresh passport applications and renewals in coordination with MEA.
+
+4. AePS (Aadhaar Enabled Payment System):
+- Cash Withdrawal via AePS: Customers of ANY bank linked with Aadhaar can withdraw cash, check balance, or get mini-statements at any Post Office counter or from a Postman/GDS using Aadhaar biometric authentication.
+- Limits & Charges: AePS service at India Post counters/doorstep is completely free of charge for customers. Bank-specific daily transaction limits apply (usually up to Rs. 10,000 per transaction).

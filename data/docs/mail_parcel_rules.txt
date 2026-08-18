@@ -1,0 +1,41 @@
+Source URL: https://www.indiapost.gov.in (Official Reference)
+
+INDIA POST MAILS, SPEED POST, PARCELS & POSB POSB ADMINISTRATIVE RULES
+
+1. Consignment Tracking & Delivery Services:
+- How to Track: Visit www.indiapost.gov.in, use PostInfo mobile app, or send SMS `POST TRACK <Consignment_Number>` to 166 or 51969. Consignment format: 13 digits (e.g., EU123456789IN or CP123456789IN).
+- Difference between Mail Types:
+  * Speed Post: Express time-bound delivery, weight up to 35 kg, real-time tracking, compensation for delay/loss, 18% GST applicable.
+  * Registered Post: Secure signed receipt mail, weight up to 4 kg (letters) / 20 kg (parcels), recipient signature mandatory, proof of delivery.
+  * Ordinary Post: Standard untracked mail sent via postage stamps placed in letter boxes, no tracking or delivery receipt.
+- Maximum Permissible Weight Limits:
+  * Speed Post: 35 kg.
+  * Registered Letter: 2 kg; Registered Parcel: 20 kg (4 kg for unregistered parcel).
+  * Business Parcel: 35 kg.
+- Delivery Timelines (Citizen Charter Standards):
+  * Local (Intra-city): 1 to 2 days.
+  * Metro to Metro: 2 to 3 days.
+  * State Capital to State Capital: 2 to 4 days.
+  * Same State (Inter-district): 2 to 3 days.
+  * Rest of India (Inter-State): 4 to 5 days.
+- Prohibited & Restricted Items: Explosives, inflammable liquids/solids, corrosive substances, toxic chemicals, live animals, illegal narcotics, currency notes, coin/bullion, firearms, ammunition, and perishable biological substances.
+
+2. Cash on Delivery (COD) & E-Commerce Services:
+- Cash on Delivery (COD): E-commerce businesses and contractual mailers can send articles via Speed Post or Business Parcel with COD facility.
+- COD Limit: Up to Rs. 50,000 per consignment. Collected cash is remitted directly into the merchant's bank account via e-Payment.
+
+3. Compensation Rules for Loss, Damage, or Delay:
+- Speed Post Delay: Equal to Speed Post charges or Rs. 100, whichever is less.
+- Speed Post Loss/Damage: Double the Speed Post charges or Rs. 1,000, whichever is less.
+- Registered Post Loss/Damage: Rs. 100 for letter mail, Rs. 100 per parcel or actual value of contents.
+- Insured Article Loss: Actual value of loss declared up to insured sum.
+
+4. POSB Savings Account Operations, Transfer, Closure & Death Claims:
+- Account Transfer (SB/PPF/SSA/TD/RD): Can be transferred from one Post Office to another Post Office or Bank branch nationwide by submitting Form SB-10(b) / Transfer Application along with passbook and KYC documents. Transfer fee: Rs. 100 + GST.
+- Premature Withdrawal / Closure Rules:
+  * Time Deposit (TD): Allowed after 6 months. Interest calculated at PO Savings Account rate (4%) if closed before 1/2/3/5 years maturity.
+  * Recurring Deposit (RD): Premature closure allowed after 3 years from opening date.
+  * PPF: Premature closure allowed after 5 financial years for specific grounds (higher education, life-threatening medical treatment).
+- Deceased Account Claim (Nominee Claim):
+  * If valid nomination exists: Nominee submits Form SB-83 along with death certificate, passbook, and KYC. Funds disbursed without legal documents up to nomination limit.
+  * Without nomination: Legal heirs submit claim form along with death certificate, legal heir certificate, indemnity bond, and letter of disclaimer.

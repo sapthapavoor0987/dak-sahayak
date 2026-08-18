@@ -1,0 +1,36 @@
+Source URL: https://www.indiapost.gov.in (Official Tariff Reference)
+
+OFFICIAL INDIA POST MAILS, SPEED POST & POSTAL TARIFF GUIDE
+
+1. Domestic Speed Post Tariffs (Distance & Weight-wise):
+- GST of 18% is applicable extra on all Speed Post tariffs.
+- Distance & Weight Tariff Slabs Table:
+  * Local (Intra-city): Up to 50g: Rs 15, 51-200g: Rs 25, 201-500g: Rs 30, Each addl 500g: Rs 10.
+  * Up to 200 km: Up to 50g: Rs 35, 51-200g: Rs 35, 201-500g: Rs 50, Each addl 500g: Rs 15.
+  * 201 to 1000 km: Up to 50g: Rs 35, 51-200g: Rs 40, 201-500g: Rs 60, Each addl 500g: Rs 30.
+  * 1001 to 2000 km: Up to 50g: Rs 35, 51-200g: Rs 60, 201-500g: Rs 80, Each addl 500g: Rs 40.
+  * Above 2000 km: Up to 50g: Rs 35, 51-200g: Rs 70, 201-500g: Rs 90, Each addl 500g: Rs 50.
+- Proof of Delivery (POD) for Speed Post: Rs 10 per consignment.
+- Maximum Permissible Weight: 35 kg per Speed Post parcel.
+
+2. Normal Post & Traditional Mail Services (Pan-India Flat Rates):
+- Postcard (Single): Rs 0.50
+- Reply Postcard: Rs 1.00
+- Printed / Competition Postcard: Rs 6.00 / Rs 10.00
+- Inland Letter Card: Rs 2.50
+- Ordinary Letter (First 20 g): Rs 5.00
+- Ordinary Letter (Every additional 20 g up to 2 kg): Rs 5.00
+- Book Post / Printed Books: Rs 1.00 per 100 grams
+- Book Packet (Pattern/Sample): First 50 g: Rs 4.00, Each additional 50 g: Rs 3.00
+- Registered Newspaper: Single copy up to 50 g: Rs 0.25, 51-100 g: Rs 0.50
+
+3. Ordinary Parcel & Registered Post Add-ons:
+- Ordinary Parcel: Rs 19 for the first 500 g, plus Rs 16 for every additional 500 g (or fraction). Maximum weight: 20 kg (registered) / 4 kg (unregistered).
+- Registered Post Fee: Regular postage + Rs 17 fixed registration charge. Optional physical Acknowledgement Due (AD card): Rs 3 extra.
+- Insurance Fee: Rs 10 for value up to Rs 200, plus Rs 6 for every additional Rs 100 insured value.
+
+4. Other Premium, Business & International Postal Services:
+- Business Post: Customized rates for corporate pre-mailing activities (printing, enveloping, pasting, sorting).
+- Direct Post: Unaddressed marketing mailers starting at Rs 1.50 to Rs 2.00 per item depending on quantity and weight.
+- Logistics Post: Freight transport for consignments over 35 kg, priced per quintal-kilometer based on route and load (FCL/LCL).
+- International EMS (Speed Post): Slabs of 250 g starting from Rs 485 (SAARC countries) to Rs 1,800 - Rs 1,965 (USA/UK/Europe/Australia).
