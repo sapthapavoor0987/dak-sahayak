@@ -1,3 +1,5 @@
+const API_BASE_URL = 'http://localhost:5000/api';
+
 // Active session transcript storage and conversation history
 let chatHistory = [];
 let activeSessionChat = [];
@@ -182,7 +184,7 @@ async function handleSend(e) {
     const loadingMsgId = appendLoadingMessage();
 
     try {
-        const response = await fetch('/api/chat', {
+        const response = await fetch(`${API_BASE_URL}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -321,7 +323,7 @@ function clearChat() {
 // Feedback submission
 async function submitFeedback(logId, type) {
     try {
-        const resp = await fetch('/api/feedback', {
+        const resp = await fetch(`${API_BASE_URL}/feedback`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ log_id: logId, feedback: type })
@@ -380,7 +382,7 @@ async function calculateTariff(e) {
     const distance = document.getElementById('calcDistance').value;
 
     try {
-        const resp = await fetch('/api/calculator', {
+        const resp = await fetch(`${API_BASE_URL}/calculator`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ weight: weight, distance: distance })
@@ -411,7 +413,7 @@ async function searchPincode(e) {
     container.innerHTML = '<p class="placeholder-text"><i class="fa-solid fa-spinner fa-spin text-red"></i> Searching India Post PIN Directory...</p>';
 
     try {
-        const resp = await fetch(`/api/pincode/${encodeURIComponent(query)}`);
+        const resp = await fetch(`${API_BASE_URL}/pincode/${encodeURIComponent(query)}`);
         const data = await resp.json();
 
         if (resp.ok && data.results && data.results.length > 0) {
@@ -445,7 +447,7 @@ async function loadHistoryModal() {
     container.innerHTML = '<p class="placeholder-text"><i class="fa-solid fa-spinner fa-spin text-red"></i> Fetching log history...</p>';
 
     try {
-        const resp = await fetch('/api/history');
+        const resp = await fetch(`${API_BASE_URL}/history`);
         const data = await resp.json();
 
         if (resp.ok && data.history && data.history.length > 0) {
@@ -493,7 +495,7 @@ function detectUserLocation() {
             const lon = position.coords.longitude;
 
             try {
-                const resp = await fetch(`/api/reverse-pincode?lat=${lat}&lon=${lon}`);
+                const resp = await fetch(`${API_BASE_URL}/reverse-pincode?lat=${lat}&lon=${lon}`);
                 const data = await resp.json();
 
                 if (resp.ok && data.pincode) {
