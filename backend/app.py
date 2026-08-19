@@ -4,7 +4,7 @@ import math
 import base64
 import requests
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response, stream_with_context
 from flask_cors import CORS
 from dotenv import load_dotenv
 from google import genai
@@ -88,7 +88,7 @@ def init_rag_system():
     else:
         print("[!] Warning: Knowledge base is empty.")
 
-def retrieve_top_chunks(query, top_k=3):
+def retrieve_top_chunks(query, top_k=2):
     """Retrieves top_k relevant text chunks matching query via TF-IDF cosine similarity."""
     global KNOWLEDGE_CHUNKS, VECTORIZER, CHUNK_MATRIX
     if not KNOWLEDGE_CHUNKS or VECTORIZER is None or CHUNK_MATRIX is None:
@@ -154,7 +154,7 @@ def init_chroma_system():
 
 init_chroma_system()
 
-def query_chroma_knowledge(query_text: str, top_k: int = 3):
+def query_chroma_knowledge(query_text: str, top_k: int = 2):
     """Queries persistent ChromaDB collection for semantic vector matches."""
     if not chroma_collection:
         return []
@@ -267,240 +267,171 @@ def api_chat():
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
 
-    # 0. Instant PIN Code Resolution (6-digit Indian PIN match)
-    pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
-    if pin_matches:
-        real_pincode_response = get_real_pincode_details(pin_matches[0])
-        if real_pincode_response:
-            log_id = log_chat(user_message, real_pincode_response, matched_category="PIN Code Lookup")
-            return jsonify({
-                "reply": real_pincode_response,
-                "response": real_pincode_response,
-                "sources": [],
-                "log_id": log_id,
-                "category": "PIN Code Lookup"
-            })
+    def generate_stream():
+        # 0. Instant PIN Code Resolution (6-digit Indian PIN match)
+        pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
+        if pin_matches:
+            real_pincode_response = get_real_pincode_details(pin_matches[0])
+            if real_pincode_response:
+                log_chat(user_message, real_pincode_response, matched_category="PIN Code Lookup")
+                yield real_pincode_response
+                return
 
-    # Clean and format incoming history turns
-    formatted_history = []
-    history_context_keywords = []
+        # Clean and format incoming history turns
+        formatted_history = []
+        history_context_keywords = []
 
-    if isinstance(history_raw, list):
-        # Exclude the very last entry if client pushed user_message before making fetch
-        turns = history_raw[:-1] if (history_raw and history_raw[-1].get("role") == "user" and history_raw[-1].get("parts") and history_raw[-1]["parts"][0] == user_message) else history_raw
+        if isinstance(history_raw, list):
+            turns = history_raw[:-1] if (history_raw and history_raw[-1].get("role") == "user" and history_raw[-1].get("parts") and history_raw[-1]["parts"][0] == user_message) else history_raw
+            
+            for turn in turns:
+                role = turn.get("role", "")
+                parts = turn.get("parts", [])
+                text_content = ""
+                if isinstance(parts, list) and parts:
+                    text_content = str(parts[0])
+                elif isinstance(turn.get("content"), str):
+                    text_content = turn.get("content")
+
+                if role in ["user", "model"] and text_content.strip():
+                    formatted_history.append(types.Content(
+                        role=role,
+                        parts=[types.Part.from_text(text=text_content.strip())]
+                    ))
+                    words = [w for w in text_content.split() if len(w) > 3 and w.lower() not in ["what", "how", "where", "when", "tell", "details", "scheme", "post", "office", "avail", "apply", "please", "can", "with"]]
+                    history_context_keywords.extend(words[:3])
+
+        # 1. Reduced Top 2 Semantic Vector Search via ChromaDB & Dynamic RAG (Immediate Latency Fix)
+        rag_query = f"{' '.join(list(set(history_context_keywords))[-4:])} {user_message}".strip()
+        chroma_chunks = query_chroma_knowledge(rag_query, top_k=2)
+        retrieved_chunks = retrieve_top_chunks(rag_query, top_k=2)
         
-        for turn in turns:
-            role = turn.get("role", "")
-            parts = turn.get("parts", [])
-            text_content = ""
-            if isinstance(parts, list) and parts:
-                text_content = str(parts[0])
-            elif isinstance(turn.get("content"), str):
-                text_content = turn.get("content")
+        all_chunks = chroma_chunks + retrieved_chunks
+        context_text = ""
+        if all_chunks:
+            context_blocks = [clean_chunk_text(chunk['text']) for chunk in all_chunks[:2]]
+            context_text = "\n\n".join([b for b in context_blocks if b])
 
-            if role in ["user", "model"] and text_content.strip():
-                formatted_history.append(types.Content(
-                    role=role,
-                    parts=[types.Part.from_text(text=text_content.strip())]
-                ))
-                # Extract key nouns/topics for contextual RAG retrieval
-                words = [w for w in text_content.split() if len(w) > 3 and w.lower() not in ["what", "how", "where", "when", "tell", "details", "scheme", "post", "office", "avail", "apply", "please", "can", "with"]]
-                history_context_keywords.extend(words[:3])
+        location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
 
-    # 1. Semantic Vector Search via ChromaDB & Dynamic RAG
-    rag_query = f"{' '.join(list(set(history_context_keywords))[-6:])} {user_message}".strip()
-    chroma_chunks = query_chroma_knowledge(rag_query, top_k=3)
-    retrieved_chunks = retrieve_top_chunks(rag_query, top_k=3)
-    
-    all_chunks = chroma_chunks + retrieved_chunks
-    context_text = ""
-    sources_list = []
-    if all_chunks:
-        context_blocks = [clean_chunk_text(chunk['text']) for chunk in all_chunks]
-        context_text = "\n\n".join([b for b in context_blocks if b])
-        sources_list = all_chunks
+        detected_pin_context = ""
+        if pin_matches:
+            pin_blocks = []
+            for p_code in set(pin_matches):
+                po_records = search_pincode(p_code)
+                if po_records:
+                    for po in po_records[:2]:
+                        block = f"* PIN: {po.get('Pincode', p_code)} | Office: {po.get('Name', 'N/A')} ({po.get('BranchType', 'SO')}) | District: {po.get('District', 'N/A')}, {po.get('State', 'N/A')}"
+                        pin_blocks.append(block.strip())
+            if pin_blocks:
+                detected_pin_context = "\n\nPIN Directory:\n" + "\n".join(pin_blocks)
 
-    location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
+        amt_val = None
+        raw_num_match = re.search(r'\b(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)\b', user_message.lower())
+        if raw_num_match:
+            try:
+                raw_str = raw_num_match.group(1).replace(',', '')
+                if raw_str and float(raw_str) >= 100:
+                    amt_val = float(raw_str)
+            except Exception:
+                pass
 
-    # Detect 6-digit Indian PIN codes or locality search in message
-    pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
-    detected_pin_context = ""
-    if pin_matches:
-        pin_blocks = []
-        for p_code in set(pin_matches):
-            po_records = search_pincode(p_code)
-            if po_records:
-                for po in po_records[:3]:
-                    block = f"""
-**PIN Code Details**
+        calc_context = ""
+        msg_lower = user_message.lower()
+        if amt_val:
+            if any(k in msg_lower for k in ["sukanya", "ssa", "daughter", "girl"]):
+                res = calculate_sukanya_maturity(amt_val)
+                calc_context = f"\n\nCalculation Sukanya: Deposit ₹{res['annual_deposit']:,.2f}/yr | Invested ₹{res['total_invested']:,.2f} | Interest ₹{res['interest_earned']:,.2f} | Maturity ₹{res['maturity_value']:,.2f}"
+            elif any(k in msg_lower for k in ["scss", "senior citizen", "senior"]):
+                res = calculate_scss_payout(amt_val)
+                calc_context = f"\n\nCalculation SCSS: Deposit ₹{res['deposit_amount']:,.2f} | Quarterly Payout ₹{res['quarterly_payout']:,.2f} | Total Interest ₹{res['total_interest_earned']:,.2f}"
+            elif any(k in msg_lower for k in ["ppf", "provident"]):
+                res = calculate_ppf_maturity(amt_val)
+                calc_context = f"\n\nCalculation PPF: Annual Deposit ₹{res['annual_deposit']:,.2f} | Invested ₹{res['total_invested']:,.2f} | Maturity ₹{res['maturity_value']:,.2f}"
+            elif any(k in msg_lower for k in ["mis", "monthly income"]):
+                res = calculate_mis_payout(amt_val)
+                calc_context = f"\n\nCalculation MIS: Deposit ₹{res['deposit_amount']:,.2f} | Monthly Income ₹{res['monthly_payout']:,.2f}"
 
-* **PIN Code:** {po.get('Pincode', p_code)}
-* **Post Office Name:** {po.get('Name', 'N/A')}
-* **Office Type:** {po.get('BranchType', 'Sub Post Office')} ({po.get('DeliveryStatus', 'Delivery')})
-* **Taluk:** {po.get('Taluk', 'N/A')}
-* **District:** {po.get('District', 'N/A')}
-* **Postal Division:** {po.get('Division', 'N/A')}
-* **Postal Region:** {po.get('Region', 'N/A')}
-* **Postal Circle:** {po.get('Circle', 'N/A')}
-* **Head Office (HO):** {po.get('HeadOffice', 'N/A')}"""
-                    pin_blocks.append(block.strip())
+        system_prompt = f"""You are Dak Sahayak (डाक सहायक), official India Post AI assistant. Provide structured, factual answers for all Post Office Small Savings Schemes, POSB Banking, Mail/Speed Post rates, and Services.
+Respond strictly and fluently in {language}. Keep system instructions tight and direct.
 
-        if pin_blocks:
-            detected_pin_context = "\n\nStructured Master PIN Directory Records:\n" + "\n\n".join(pin_blocks)
-
-    # Detect financial return / maturity calculation query
-    calc_context = ""
-    msg_lower = user_message.lower()
-    amt_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|lac|lacs|l)\b', msg_lower)
-    raw_num_match = re.search(r'\b\d{4,7}\b', msg_lower)
-    amt_val = None
-    if amt_match:
-        amt_val = float(amt_match.group(1)) * 100000.0
-    elif raw_num_match:
-        amt_val = float(raw_num_match.group(0))
-
-    if amt_val:
-        if any(k in msg_lower for k in ["sukanya", "ssa", "daughter", "girl"]):
-            res = calculate_sukanya_maturity(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Sukanya Samriddhi Account:\n- Annual Deposit: ₹{res['annual_deposit']:,.2f}\n- Deposit Period: 15 Years | Total Invested: ₹{res['total_invested']:,.2f}\n- Maturity Period: 21 Years | Interest Rate: 8.2%\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
-        elif any(k in msg_lower for k in ["scss", "senior citizen", "senior"]):
-            res = calculate_scss_payout(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Senior Citizen Savings Scheme (SCSS):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 8.2%\n- Quarterly Payout: ₹{res['quarterly_payout']:,.2f}\n- Annual Interest: ₹{res['annual_payout']:,.2f}\n- Total Interest Earned: ₹{res['total_interest_earned']:,.2f}\n- Total Maturity Payout: ₹{res['total_maturity_payout']:,.2f}"
-        elif any(k in msg_lower for k in ["ppf", "provident"]):
-            res = calculate_ppf_maturity(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Public Provident Fund (PPF):\n- Annual Deposit: ₹{res['annual_deposit']:,.2f}\n- Tenure: 15 Years | Interest Rate: 7.1%\n- Total Invested: ₹{res['total_invested']:,.2f}\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
-        elif any(k in msg_lower for k in ["mis", "monthly income"]):
-            res = calculate_mis_payout(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Post Office Monthly Income Scheme (MIS):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 7.4%\n- Monthly Income Payout: ₹{res['monthly_payout']:,.2f}\n- Annual Interest: ₹{res['annual_payout']:,.2f}\n- Total Interest Earned over 5 Years: ₹{res['total_interest_earned']:,.2f}"
-        elif any(k in msg_lower for k in ["nsc", "national savings certificate"]):
-            res = calculate_nsc_maturity(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for National Savings Certificate (NSC):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 7.7% Compounded Annually\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
-        elif any(k in msg_lower for k in ["kvp", "kisan vikas"]):
-            res = calculate_kvp_maturity(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Kisan Vikas Patra (KVP):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 115 Months (9 Years 7 Months) | Interest Rate: 7.5%\n- Final Maturity Amount (Doubles Principal): ₹{res['maturity_value']:,.2f}"
-
-    system_prompt = f"""You are Dak Sahayak (डाक सहायक), official India Post assistant. Always provide structured, factual breakdowns for all Post Office Small Savings Schemes including interest rates, compounding frequency, min/max limits, required KYC documents, and tax status (Section 80C / 80TTA / 80TTB).
-Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali), generate natural native script text.
-Always maintain strict conversational continuity with previous turns in this dialogue session.
-
-Official India Post Small Savings Rates:
-- Sukanya Samriddhi Account (SSA): 8.2% p.a. (Compounded annually)
-- Senior Citizen Savings Scheme (SCSS): 8.2% p.a. (Paid quarterly)
-- National Savings Certificate (NSC VIII): 7.7% p.a. (Compounded annually)
-- Kisan Vikas Patra (KVP): 7.5% p.a. (Doubles in 115 months / 9 yrs 7 mos)
-- Mahila Samman Savings Certificate (MSSC): 7.5% p.a. (Compounded quarterly)
-- Post Office Time Deposit (5-Year FD): 7.5% p.a. (1-Yr 6.9%, 2-Yr 7.0%, 3-Yr 7.1%)
-- Post Office Monthly Income Scheme (MIS): 7.4% p.a. (Paid monthly)
-- Public Provident Fund (PPF): 7.1% p.a. (Compounded annually)
-- Post Office Recurring Deposit (RD): 6.7% p.a. (Compounded quarterly)
-- Post Office Savings Account (POSA): 4.0% p.a.
-
-MANDATORY RULE FOR BANK CHARGES & FEE SCHEDULE INQUIRIES:
-Whenever a user asks about Post Office bank charges, fee schedules, duplicate passbook fees, account transfer charges, nomination update costs, or cheque book fees, format your response in clean, concise bullet points or markdown tables using exact official India Post fee rates:
-- Duplicate Passbook: ₹50
-- Statement of Account / Deposit Receipt: ₹20 per case
-- Passbook in lieu of lost/mutilated certificate: ₹10 per registration
-- Nomination change / cancellation: Completely Free (No fee applicable as per SB Order No. 05/2025)
-- Account Transfer: ₹100
-- Pledging of Account: ₹100
-- Cheque Book: Free for up to 10 leaves/year, ₹2 per leaf thereafter
-- Cheque Dishonour / Bounce: ₹100
-(Note: Statutory taxes/GST as applicable on above charges shall also be payable).
-
-MANDATORY RULE FOR ALL PIN CODE & LOCATION QUERIES:
-Whenever the user asks about a PIN code or its location/taluk/district/branch (e.g., "575020", "location of 575020", "Ullal", "PIN 110001"), you MUST respond using ONLY this exact structured template for each matching post office:
-
-**PIN Code Details**
-
-* **PIN Code:** [6-Digit PIN]
-* **Post Office Name:** [Full Office Name]
-* **Office Type:** [Sub Post Office (SO) / Branch Post Office (BO) / Head Post Office (HO)] ([Delivery / Non-Delivery])
-* **Taluk:** [Taluk / Tehsil]
-* **District:** [District Name]
-* **Postal Division:** [Division Name]
-* **Postal Region:** [Region Name]
-* **Postal Circle:** [Circle Name]
-* **Head Office (HO):** [Related Head Post Office]
-
-Do NOT write conversational fluff, introductory remarks, or concluding sentences before or after this block. Output the exact field labels verbatim.
+Small Savings Rates: SSA 8.2%, SCSS 8.2%, NSC 7.7%, KVP 7.5%, MSSC 7.5%, 5-Yr FD 7.5%, MIS 7.4%, PPF 7.1%, RD 6.7%, POSA 4.0%.
+Fee Schedule: Duplicate Passbook ₹50, Account Transfer ₹100, Nomination Free (SB Order 05/2025).
 
 {location_str}
 {detected_pin_context}
 {calc_context}
 
-Official India Post Knowledge Base:
+Official India Post Knowledge:
 {context_text}"""
 
-    reply_text = ""
-    if client:
-        models_to_try = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]
-        for m in models_to_try:
-            try:
-                chat = client.chats.create(
-                    model=m,
-                    history=formatted_history,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        temperature=0.2
-                    )
-                )
-                response = chat.send_message(user_message)
-                if response and response.text:
-                    reply_text = response.text.strip()
-                    break
-            except Exception as ex:
+        full_response_text = ""
+        stream_success = False
+
+        if client:
+            models_to_try = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]
+            for m in models_to_try:
                 try:
-                    response = client.models.generate_content(
+                    chat = client.chats.create(
                         model=m,
-                        contents=f"System Prompt:\n{system_prompt}\n\nPrevious Conversation:\n{formatted_history}\n\nCurrent Question: {user_message}",
+                        history=formatted_history,
                         config=types.GenerateContentConfig(
+                            system_instruction=system_prompt,
                             temperature=0.2
                         )
                     )
-                    if response and response.text:
-                        reply_text = response.text.strip()
+                    response_stream = chat.send_message_stream(user_message)
+                    for chunk in response_stream:
+                        if chunk and chunk.text:
+                            full_response_text += chunk.text
+                            yield chunk.text
+                    if full_response_text.strip():
+                        stream_success = True
                         break
-                except Exception as ex2:
-                    print(f"[-] Chat model {m} note: {ex2}")
+                except Exception as ex:
+                    try:
+                        response_stream = client.models.generate_content_stream(
+                            model=m,
+                            contents=f"System Prompt:\n{system_prompt}\n\nPrevious Conversation:\n{formatted_history}\n\nCurrent Question: {user_message}",
+                            config=types.GenerateContentConfig(
+                                temperature=0.2
+                            )
+                        )
+                        for chunk in response_stream:
+                            if chunk and chunk.text:
+                                full_response_text += chunk.text
+                                yield chunk.text
+                        if full_response_text.strip():
+                            stream_success = True
+                            break
+                    except Exception as ex2:
+                        print(f"[-] Streaming error with {m}: {ex2}")
 
-    # Fallback if reply_text is empty
-    if not reply_text:
-        if retrieved_chunks:
-            blocks = []
-            for idx, chunk in enumerate(retrieved_chunks[:3], 1):
-                clean_t = clean_chunk_text(chunk.get("text", ""))
-                if clean_t:
-                    clean_lines = [l.strip() for l in clean_t.splitlines() if l.strip() and not l.strip().startswith("---")]
-                    formatted_block = "\n".join([f"* {l}" if not l.startswith("*") and not l.startswith("#") else l for l in clean_lines[:5]])
-                    doc_title = chunk.get("source_display", f"Information Block {idx}")
-                    blocks.append(f"### {idx}. {doc_title}\n{formatted_block}")
-            reply_text = "\n\n---\n\n".join(blocks) if blocks else "India Post provides comprehensive Small Savings, Mail, and POSB Banking services across India."
-        else:
-            reply_text = "India Post provides comprehensive Small Savings, Mail, and POSB Banking services across India."
+        # Fallback if streaming failed or client empty
+        if not stream_success or not full_response_text.strip():
+            if retrieved_chunks:
+                blocks = []
+                for idx, chunk in enumerate(retrieved_chunks[:2], 1):
+                    clean_t = clean_chunk_text(chunk.get("text", ""))
+                    if clean_t:
+                        clean_lines = [l.strip() for l in clean_t.splitlines() if l.strip() and not l.strip().startswith("---")]
+                        formatted_block = "\n".join([f"* {l}" if not l.startswith("*") and not l.startswith("#") else l for l in clean_lines[:4]])
+                        doc_title = chunk.get("source_display", f"Information {idx}")
+                        blocks.append(f"### {idx}. {doc_title}\n{formatted_block}")
+                full_response_text = "\n\n---\n\n".join(blocks) if blocks else "India Post provides comprehensive Small Savings, Mail, and POSB Banking services across India."
+            else:
+                full_response_text = "India Post provides comprehensive Small Savings, Mail, and POSB Banking services across India."
+            yield full_response_text
 
-    # Determine category
-    category = "General Inquiry"
-    msg_lower = user_message.lower()
-    if "speed" in msg_lower or "tariff" in msg_lower or "rate" in msg_lower or "parcel" in msg_lower or "mail" in msg_lower or "tracking" in msg_lower:
-        category = "Speed Post & Mails"
-    elif "saving" in msg_lower or "ppf" in msg_lower or "sukanya" in msg_lower or "deposit" in msg_lower or "account" in msg_lower or "pomis" in msg_lower or "kvp" in msg_lower or "nsc" in msg_lower or "rd" in msg_lower or "td" in msg_lower:
-        category = "Post Office Savings Bank"
-    elif "pli" in msg_lower or "rpli" in msg_lower or "insurance" in msg_lower or "suraksha" in msg_lower or "santosh" in msg_lower:
-        category = "Postal Life Insurance"
-    elif "ippb" in msg_lower or "aadhaar" in msg_lower or "aeps" in msg_lower or "doorstep" in msg_lower or "passport" in msg_lower:
-        category = "IPPB & Aadhaar Services"
-    elif "complaint" in msg_lower or "grievance" in msg_lower or "timing" in msg_lower or "hours" in msg_lower or "charter" in msg_lower or "compensation" in msg_lower:
-        category = "Grievance & Facilities"
+        # Log conversation to SQLite database
+        category = "General Inquiry"
+        if "speed" in msg_lower or "tariff" in msg_lower or "rate" in msg_lower or "parcel" in msg_lower:
+            category = "Speed Post & Mails"
+        elif "saving" in msg_lower or "ppf" in msg_lower or "sukanya" in msg_lower or "deposit" in msg_lower:
+            category = "Post Office Savings Bank"
+        log_chat(user_message, full_response_text, matched_category=category)
 
-    log_id = log_chat(user_message, reply_text, matched_category=category)
-
-    return jsonify({
-        "reply": reply_text,
-        "response": reply_text,
-        "sources": [],
-        "log_id": log_id,
-        "category": category
-    })
+    return Response(stream_with_context(generate_stream()), content_type="text/plain; charset=utf-8")
 
 @app.route("/api/history", methods=["GET"])
 def api_history():

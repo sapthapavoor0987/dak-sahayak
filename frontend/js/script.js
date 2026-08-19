@@ -193,31 +193,82 @@ async function handleSend(e) {
                 language: currentLanguage
             })
         });
-        const data = await response.json();
 
-        // Remove loading placeholder
-        removeMessage(loadingMsgId);
-
-        if (response.ok) {
-            const rawText = data.reply || data.response || data.message;
-            const replyText = (rawText && rawText.trim()) ? rawText.trim() : "* India Post offers multiple Small Savings Schemes including PPF, SSA (Sukanya Samriddhi), NSC, and Post Office Savings Account.";
-            
-            // Record assistant turn in global chat history
-            chatHistory.push({ role: "model", parts: [replyText] });
-            
-            appendMessage('bot', replyText, data.sources || [], data.log_id);
-            activeSessionChat.push({ sender: 'DAK SAHAYAK', message: replyText, time: new Date().toLocaleTimeString() });
-        } else {
-            appendMessage('bot', `⚠️ Error: ${data.error || 'Failed to process request.'}`);
+        if (!response.ok) {
+            removeMessage(loadingMsgId);
+            appendMessage('bot', `⚠️ Error: Server returned status ${response.status}`);
+            return;
         }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let botResponse = "";
+        let botTextContentEl = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunkText = decoder.decode(value, { stream: true });
+            botResponse += chunkText;
+
+            if (loadingMsgId && document.getElementById(loadingMsgId)) {
+                removeMessage(loadingMsgId);
+            }
+
+            if (!botTextContentEl) {
+                botTextContentEl = createBotMessageStreamElement();
+            }
+
+            botTextContentEl.innerHTML = parseMarkdown(botResponse);
+            const chatThread = document.getElementById('chatThread');
+            if (chatThread) chatThread.scrollTop = chatThread.scrollHeight;
+        }
+
+        if (!botResponse.trim()) {
+            botResponse = "* India Post offers multiple Small Savings Schemes including PPF, SSA (Sukanya Samriddhi), NSC, and Post Office Savings Account.";
+            if (botTextContentEl) botTextContentEl.innerHTML = parseMarkdown(botResponse);
+        }
+
+        // Record assistant turn in global chat history
+        chatHistory.push({ role: "model", parts: [botResponse] });
+        activeSessionChat.push({ sender: 'DAK SAHAYAK', message: botResponse, time: new Date().toLocaleTimeString() });
+
     } catch (err) {
         removeMessage(loadingMsgId);
         appendMessage('bot', '⚠️ Connection error. Please check if backend Flask server is running.');
         console.error("Chat API Error:", err);
     } finally {
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = '<span>Send</span> <i class="fa-solid fa-paper-plane"></i>';
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<span>Send</span> <i class="fa-solid fa-paper-plane"></i>';
+        }
     }
+}
+
+function createBotMessageStreamElement() {
+    const chatThread = document.getElementById('chatThread');
+    const msgWrapper = document.createElement('div');
+    msgWrapper.className = 'message-wrapper bot';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.innerHTML = '<i class="fa-solid fa-robot"></i>';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-text-content';
+    contentDiv.innerHTML = '';
+    bubble.appendChild(contentDiv);
+
+    msgWrapper.appendChild(avatar);
+    msgWrapper.appendChild(bubble);
+    chatThread.appendChild(msgWrapper);
+    chatThread.scrollTop = chatThread.scrollHeight;
+
+    return contentDiv;
 }
 
 // Append Chat Message to UI
