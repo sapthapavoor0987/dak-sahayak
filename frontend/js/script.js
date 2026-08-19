@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (typeof window !== 'undefined' && window.location && window.location.origin && window.location.origin.startsWith('http'))
+    ? `${window.location.origin}/api`
+    : 'http://localhost:5000/api';
 
 // Active session transcript storage and conversation history
 let chatHistory = [];
