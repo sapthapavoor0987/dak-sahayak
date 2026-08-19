@@ -220,7 +220,7 @@ Official India Post Knowledge Base (from Supabase Vector DB):
 
     def generate_stream():
         full_text = ""
-        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        models_to_try = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"]
         stream_success = False
 
         if client:
