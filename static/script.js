@@ -474,3 +474,78 @@ async function loadHistoryModal() {
     }
 }
 
+// Geolocation PIN Code Resolver ("My PIN" button feature)
+function detectUserLocation() {
+    const btn = document.getElementById('detectLocationBtn');
+    if (!navigator.geolocation) {
+        alert("Location permission denied. Please allow location access in your browser or enter your PIN manually.");
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Locating...';
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+
+            try {
+                const resp = await fetch(`/api/reverse-pincode?lat=${lat}&lon=${lon}`);
+                const data = await resp.json();
+
+                if (resp.ok && data.pincode) {
+                    openModal('pincodeModal');
+                    const pinInput = document.getElementById('pinInput');
+                    if (pinInput) pinInput.value = data.pincode;
+
+                    const container = document.getElementById('pinResultsContainer');
+                    if (container && data.results && data.results.length > 0) {
+                        const locName = data.address?.suburb || data.address?.city || data.address?.state_district || 'Detected Area';
+                        let gridHTML = `<p class="placeholder-text" style="color:var(--dark-red); margin-bottom:12px; font-weight:600;">📍 Location Detected: ${locName} (PIN: ${data.pincode})</p><div class="pin-card-grid">`;
+                        data.results.forEach(office => {
+                            gridHTML += `
+                                <div class="pin-card">
+                                    <h4><i class="fa-solid fa-building-columns"></i> ${office.Name}</h4>
+                                    <span class="pin-badge">PIN: ${office.Pincode}</span>
+                                    <div class="pin-detail"><strong>Type:</strong> ${office.BranchType}</div>
+                                    <div class="pin-detail"><strong>Delivery:</strong> ${office.DeliveryStatus}</div>
+                                    <div class="pin-detail"><strong>District:</strong> ${office.District}</div>
+                                    <div class="pin-detail"><strong>State:</strong> ${office.State}</div>
+                                </div>
+                            `;
+                        });
+                        gridHTML += '</div>';
+                        container.innerHTML = gridHTML;
+                    } else if (container) {
+                        container.innerHTML = `<p class="placeholder-text">Resolved PIN: ${data.pincode}, but no detailed branch records were found in directory.</p>`;
+                    }
+                } else {
+                    alert(data.message || "Could not resolve PIN from your location. Please enter your PIN manually.");
+                }
+            } catch (err) {
+                alert("Location lookup error. Please enter your PIN manually.");
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> <span>📍 My PIN</span>';
+                }
+            }
+        },
+        (error) => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> <span>📍 My PIN</span>';
+            }
+            alert("Location permission denied. Please allow location access in your browser or enter your PIN manually.");
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        }
+    );
+}
+

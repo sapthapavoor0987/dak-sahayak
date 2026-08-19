@@ -543,5 +543,44 @@ def api_pincode(query):
         return jsonify({"status": "Success", "results": results})
     return jsonify({"status": "Error", "message": f"No post office found for '{query_str}'"}), 404
 
+@app.route("/api/reverse-pincode", methods=["GET"])
+def api_reverse_pincode():
+    lat = request.args.get("lat", "").strip()
+    lon = request.args.get("lon", "").strip()
+
+    if not lat or not lon:
+        return jsonify({"status": "Error", "message": "Latitude and longitude query parameters are required."}), 400
+
+    headers = {"User-Agent": "DakSahayakApp/1.0 (India Post AI Assistant)"}
+    url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            res_json = resp.json()
+            address = res_json.get("address", {})
+            postcode = address.get("postcode", "").strip()
+
+            if postcode:
+                postcode_match = re.search(r'\b[1-9][0-9]{5}\b', postcode)
+                if postcode_match:
+                    postcode = postcode_match.group(0)
+
+            if postcode and len(postcode) == 6:
+                results = search_pincode(postcode)
+                return jsonify({
+                    "status": "Success",
+                    "pincode": postcode,
+                    "address": address,
+                    "results": results
+                })
+    except Exception as e:
+        print(f"[-] Reverse geocoding error: {e}")
+
+    return jsonify({
+        "status": "Fallback",
+        "message": "Unable to resolve location to a valid 6-digit PIN. Please enter your PIN manually."
+    }), 200
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=False)
