@@ -47,6 +47,12 @@ def serve_static(path):
 # Initialize Database
 init_db()
 
+# Load environment variables explicitly
+dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if not os.path.exists(dotenv_path):
+    dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+load_dotenv(dotenv_path)
+
 # Initialize Gemini Client
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 client = None
@@ -427,7 +433,7 @@ Official India Post Knowledge Base:
 
     reply_text = ""
     if client:
-        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-flash", "gemini-flash-latest"]
+        models_to_try = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]
         for m in models_to_try:
             try:
                 chat = client.chats.create(
@@ -446,9 +452,8 @@ Official India Post Knowledge Base:
                 try:
                     response = client.models.generate_content(
                         model=m,
-                        contents=f"Previous Conversation:\n{formatted_history}\n\nCurrent Question: {user_message}",
+                        contents=f"System Prompt:\n{system_prompt}\n\nPrevious Conversation:\n{formatted_history}\n\nCurrent Question: {user_message}",
                         config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
                             temperature=0.2
                         )
                     )
@@ -461,20 +466,17 @@ Official India Post Knowledge Base:
     # Fallback if reply_text is empty
     if not reply_text:
         if retrieved_chunks:
-            extracted_bullets = []
-            for chunk in retrieved_chunks:
-                text_content = chunk.get('text', '')
-                for raw_line in text_content.splitlines():
-                    clean_line = raw_line.strip().lstrip('*-•1234567890. ')
-                    if len(clean_line) > 25 and not clean_line.lower().startswith("source"):
-                        extracted_bullets.append(f"* {clean_line}")
-                    if len(extracted_bullets) >= 4:
-                        break
-                if len(extracted_bullets) >= 4:
-                    break
-            reply_text = "\n".join(extracted_bullets[:4]) if extracted_bullets else "* India Post provides comprehensive Mail, Savings Bank, and Insurance services across India."
+            blocks = []
+            for idx, chunk in enumerate(retrieved_chunks[:3], 1):
+                clean_t = clean_chunk_text(chunk.get("text", ""))
+                if clean_t:
+                    clean_lines = [l.strip() for l in clean_t.splitlines() if l.strip() and not l.strip().startswith("---")]
+                    formatted_block = "\n".join([f"* {l}" if not l.startswith("*") and not l.startswith("#") else l for l in clean_lines[:5]])
+                    doc_title = chunk.get("source_display", f"Information Block {idx}")
+                    blocks.append(f"### {idx}. {doc_title}\n{formatted_block}")
+            reply_text = "\n\n---\n\n".join(blocks) if blocks else "India Post provides comprehensive Small Savings, Mail, and POSB Banking services across India."
         else:
-            reply_text = "* India Post provides comprehensive Mail, Savings Bank, and Insurance services across India."
+            reply_text = "India Post provides comprehensive Small Savings, Mail, and POSB Banking services across India."
 
     # Determine category
     category = "General Inquiry"
