@@ -1,20 +1,25 @@
 import os
 import re
 import math
-import base64
 import requests
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
-from fetch_sources import harvest_documents
-from pdf_reader import load_dynamic_knowledge_base
-from database import init_db, log_chat, update_feedback, get_recent_history, search_pincode
+from supabase_client import (
+    get_user_from_token,
+    get_user_conversations,
+    create_user_conversation,
+    update_conversation_title,
+    get_conversation_messages,
+    save_chat_message,
+    delete_user_conversation,
+    search_pincode_db
+)
+from vector_search import search_documents
 from calculator import (
     calculate_speed_post, calculate_ordinary_letter, calculate_postcard,
     calculate_inland_letter, calculate_ordinary_parcel, calculate_registered_post, calculate_insurance,
@@ -22,309 +27,105 @@ from calculator import (
     calculate_mis_payout, calculate_nsc_maturity, calculate_kvp_maturity
 )
 
-# Load environment variables
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+load_dotenv(dotenv_path)
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-@app.after_request
-def add_header(response):
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
-
-# Initialize Database
-init_db()
-
-# Initialize Gemini Client
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 client = None
 if GEMINI_API_KEY:
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
-        print(f"[AI Status] Gemini Client initialized: True")
+        print("[AI Status] Gemini Client initialized: True")
     except Exception as e:
-        print(f"[AI Status] Gemini Client initialized: False ({e})")
+        print(f"[AI Status] Gemini Client initialization failed: {e}")
 else:
-    print("[AI Status] Gemini Client initialized: False")
+    print("[AI Status] Gemini API Key missing!")
 
-# RAG Index State
-KNOWLEDGE_CHUNKS = []
-VECTORIZER = None
-CHUNK_MATRIX = None
+def get_auth_user():
+    """Extracts and verifies Bearer token from request Authorization header."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.split(" ")[1]
+    return get_user_from_token(token)
 
-def init_rag_system():
-    """Builds TF-IDF vector index over dynamic document chunks in data/docs."""
-    global KNOWLEDGE_CHUNKS, VECTORIZER, CHUNK_MATRIX
-    
-    # Ensure documents are harvested
-    docs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "docs")
-    if not os.path.exists(docs_dir) or not os.listdir(docs_dir):
-        harvest_documents()
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "service": "Dak Sahayak AI Backend (Supabase + Gemini)"})
 
-    KNOWLEDGE_CHUNKS = load_dynamic_knowledge_base(docs_dir)
-    if KNOWLEDGE_CHUNKS:
-        texts = [chunk["text"] for chunk in KNOWLEDGE_CHUNKS]
-        VECTORIZER = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
-        CHUNK_MATRIX = VECTORIZER.fit_transform(texts)
-        print(f"[*] RAG Engine initialized: {len(KNOWLEDGE_CHUNKS)} document chunks indexed.")
-    else:
-        print("[!] Warning: Knowledge base is empty.")
+# --- Conversation Endpoints ---
 
-def retrieve_top_chunks(query, top_k=3):
-    """Retrieves top_k relevant text chunks matching query via TF-IDF cosine similarity."""
-    global KNOWLEDGE_CHUNKS, VECTORIZER, CHUNK_MATRIX
-    if not KNOWLEDGE_CHUNKS or VECTORIZER is None or CHUNK_MATRIX is None:
-        return []
+@app.route("/api/conversations", methods=["GET"])
+def list_conversations():
+    user = get_auth_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    conversations = get_user_conversations(user.id)
+    return jsonify({"conversations": conversations})
 
-    try:
-        query_vec = VECTORIZER.transform([query])
-        similarities = cosine_similarity(query_vec, CHUNK_MATRIX).flatten()
-        top_indices = similarities.argsort()[::-1][:top_k]
-        
-        results = []
-        for idx in top_indices:
-            score = float(similarities[idx])
-            if score > 0.01:
-                chunk = KNOWLEDGE_CHUNKS[idx]
-                results.append({
-                    "text": chunk["text"],
-                    "source": chunk["source"],
-                    "page": chunk["page"],
-                    "source_display": chunk["source_display"],
-                    "score": round(score, 4)
-                })
-        return results
-    except Exception as e:
-        print(f"[-] Vector search error: {e}")
-        return []
+@app.route("/api/conversations", methods=["POST"])
+def create_conversation():
+    user = get_auth_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json() or {}
+    title = data.get("title", "New Chat").strip()
+    conv_id = create_user_conversation(user.id, title=title)
+    if not conv_id:
+        return jsonify({"error": "Failed to create conversation"}), 500
+    return jsonify({"conversation_id": conv_id, "title": title})
 
-def clean_chunk_text(text):
-    """Strips URLs, metadata headers, and raw website noise from context text."""
-    if not text:
-        return ""
-    cleaned = re.sub(r'https?://\S+|www\.\S+', '', text)
-    cleaned = re.sub(r'(?i)^(source url|source|url|file|page):.*$', '', cleaned, flags=re.MULTILINE)
-    cleaned = re.sub(r'(?i)\b(overview|detail|summary|feature):\s*', '', cleaned)
-    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
-    return "\n".join(lines)
+@app.route("/api/conversations/<conversation_id>", methods=["DELETE"])
+def delete_conversation(conversation_id):
+    user = get_auth_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    success = delete_user_conversation(conversation_id, user.id)
+    return jsonify({"success": success})
 
-# Initialize RAG on startup
-init_rag_system()
+@app.route("/api/conversations/<conversation_id>/messages", methods=["GET"])
+def list_messages(conversation_id):
+    user = get_auth_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    messages = get_conversation_messages(conversation_id)
+    return jsonify({"messages": messages})
 
-# Initialize Persistent ChromaDB Vector Search Engine
-import chromadb
-from ingest_chroma import ingest_postal_knowledge
-
-CHROMA_DATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_data")
-chroma_client = None
-chroma_collection = None
-
-def init_chroma_system():
-    global chroma_client, chroma_collection
-    try:
-        if not os.path.exists(CHROMA_DATA_PATH):
-            ingest_postal_knowledge()
-            
-        chroma_client = chromadb.PersistentClient(path=CHROMA_DATA_PATH)
-        chroma_collection = chroma_client.get_or_create_collection(
-            name="postal_knowledge",
-            metadata={"hnsw:space": "cosine"}
-        )
-        print(f"[*] Persistent ChromaDB Client initialized at '{CHROMA_DATA_PATH}' (Collection: 'postal_knowledge', Documents: {chroma_collection.count()}).")
-    except Exception as e:
-        print(f"[-] Error initializing persistent ChromaDB: {e}")
-
-init_chroma_system()
-
-def query_chroma_knowledge(query_text: str, top_k: int = 3):
-    """Queries persistent ChromaDB collection for semantic vector matches."""
-    if not chroma_collection:
-        return []
-    try:
-        results = chroma_collection.query(
-            query_texts=[query_text],
-            n_results=top_k
-        )
-        retrieved_docs = []
-        if results and "documents" in results and results["documents"]:
-            docs = results["documents"][0]
-            metas = results.get("metadatas", [[]])[0]
-            for idx, doc in enumerate(docs):
-                meta = metas[idx] if idx < len(metas) else {}
-                retrieved_docs.append({
-                    "text": doc,
-                    "metadata": meta,
-                    "source": meta.get("source", "ChromaDB"),
-                    "source_display": meta.get("scheme_name", meta.get("service", "Chroma Vector DB"))
-                })
-        return retrieved_docs
-    except Exception as ex:
-        print(f"[-] Semantic Chroma vector query error: {ex}")
-        return []
-
-# PIN Code Lookup Mock Database fallback for offline resilience
-MOCK_PINCODES = {
-    "110001": [
-        {"Name": "New Delhi GPO", "BranchType": "Head Post Office", "DeliveryStatus": "Delivery", "District": "New Delhi", "State": "Delhi", "Pincode": "110001"},
-        {"Name": "Connaught Place SO", "BranchType": "Sub Post Office", "DeliveryStatus": "Non-Delivery", "District": "New Delhi", "State": "Delhi", "Pincode": "110001"}
-    ],
-    "400001": [
-        {"Name": "Mumbai GPO", "BranchType": "Head Post Office", "DeliveryStatus": "Delivery", "District": "Mumbai", "State": "Maharashtra", "Pincode": "400001"},
-        {"Name": "Fort Market SO", "BranchType": "Sub Post Office", "DeliveryStatus": "Delivery", "District": "Mumbai", "State": "Maharashtra", "Pincode": "400001"}
-    ],
-    "560001": [
-        {"Name": "Bengaluru GPO", "BranchType": "Head Post Office", "DeliveryStatus": "Delivery", "District": "Bengaluru", "State": "Karnataka", "Pincode": "560001"},
-        {"Name": "Vidhana Soudha SO", "BranchType": "Sub Post Office", "DeliveryStatus": "Delivery", "District": "Bengaluru", "State": "Karnataka", "Pincode": "560001"}
-    ],
-    "700001": [
-        {"Name": "Kolkata GPO", "BranchType": "Head Post Office", "DeliveryStatus": "Delivery", "District": "Kolkata", "State": "West Bengal", "Pincode": "700001"}
-    ],
-    "600001": [
-        {"Name": "Chennai GPO", "BranchType": "Head Post Office", "DeliveryStatus": "Delivery", "District": "Chennai", "State": "Tamil Nadu", "Pincode": "600001"}
-    ]
-}
-
-# Web Routes
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-def get_real_pincode_details(pincode: str):
-    p_clean = pincode.strip()
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        res = requests.get(f"https://api.postalpincode.in/pincode/{p_clean}", headers=headers, timeout=5)
-        if res.status_code == 200:
-            data = res.json()
-            if data and isinstance(data, list) and data[0].get("Status") == "Success":
-                po_list = data[0].get("PostOffice", [])
-                if po_list:
-                    primary = po_list[0]
-                    # Format exact details
-                    po_names = ", ".join([f"{p['Name']} ({p.get('BranchType', 'PO')})" for p in po_list])
-                    formatted = (
-                        f"**PIN Code Details**\n\n"
-                        f"* **PIN Code:** {primary.get('Pincode', p_clean)}\n"
-                        f"* **Post Office Name:** {po_names}\n"
-                        f"* **Office Type:** {primary.get('BranchType', 'Sub Post Office')} ({primary.get('DeliveryStatus', 'Delivery Office')})\n"
-                        f"* **Taluk:** {primary.get('Block') or primary.get('Taluk') or primary.get('District')}\n"
-                        f"* **District:** {primary.get('District')}\n"
-                        f"* **Postal Division:** {primary.get('Division')}\n"
-                        f"* **Postal Region:** {primary.get('Region')}\n"
-                        f"* **Postal Circle:** {primary.get('Circle')}\n"
-                        f"* **State:** {primary.get('State')}"
-                    )
-                    return formatted
-    except Exception as e:
-        print(f"Error fetching PIN: {e}")
-
-    # Fallback to local DB search if online API unavailable
-    try:
-        local_records = search_pincode(p_clean)
-        if local_records:
-            primary = local_records[0]
-            po_names = ", ".join([f"{p['Name']} ({p.get('BranchType', 'PO')})" for p in local_records])
-            formatted = (
-                f"**PIN Code Details**\n\n"
-                f"* **PIN Code:** {primary.get('Pincode', p_clean)}\n"
-                f"* **Post Office Name:** {po_names}\n"
-                f"* **Office Type:** {primary.get('BranchType', 'Sub Post Office')} ({primary.get('DeliveryStatus', 'Delivery Office')})\n"
-                f"* **Taluk:** {primary.get('Taluk') or primary.get('District')}\n"
-                f"* **District:** {primary.get('District')}\n"
-                f"* **Postal Division:** {primary.get('Division')}\n"
-                f"* **Postal Region:** {primary.get('Region')}\n"
-                f"* **Postal Circle:** {primary.get('Circle')}\n"
-                f"* **State:** {primary.get('State')}"
-            )
-            return formatted
-    except Exception as ex:
-        print(f"Local PIN lookup error: {ex}")
-
-    return None
+# --- Main Streaming Chat Endpoint with Supabase RAG ---
 
 @app.route("/api/chat", methods=["POST"])
-def api_chat():
+def chat():
+    user = get_auth_user()
     data = request.get_json() or {}
     user_message = data.get("message", "").strip()
+    conversation_id = data.get("conversation_id", "").strip()
     language = data.get("language", "English").strip()
-    history_raw = data.get("history", [])
     pincode = data.get("pincode", "")
     user_location = data.get("user_location", {})
 
     if not user_message:
-        return jsonify({"error": "Message is required"}), 400
+        return jsonify({"error": "Message cannot be empty"}), 400
 
-    # 0. Instant PIN Code Resolution (6-digit Indian PIN match)
+    # Auto-create conversation if not provided
+    if user and not conversation_id:
+        conversation_id = create_user_conversation(user.id, title=user_message[:40])
+
+    # Save user message to Supabase
+    if conversation_id:
+        save_chat_message(conversation_id, "user", user_message)
+
+    # 1. Instant PIN Code Resolution
     pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
     if pin_matches:
-        real_pincode_response = get_real_pincode_details(pin_matches[0])
-        if real_pincode_response:
-            log_id = log_chat(user_message, real_pincode_response, matched_category="PIN Code Lookup")
-            return jsonify({
-                "reply": real_pincode_response,
-                "response": real_pincode_response,
-                "sources": [],
-                "log_id": log_id,
-                "category": "PIN Code Lookup"
-            })
+        po_records = search_pincode_db(pin_matches[0])
+        if po_records:
+            po = po_records[0]
+            pin_response = f"""**PIN Code Details**
 
-    # Clean and format incoming history turns
-    formatted_history = []
-    history_context_keywords = []
-
-    if isinstance(history_raw, list):
-        # Exclude the very last entry if client pushed user_message before making fetch
-        turns = history_raw[:-1] if (history_raw and history_raw[-1].get("role") == "user" and history_raw[-1].get("parts") and history_raw[-1]["parts"][0] == user_message) else history_raw
-        
-        for turn in turns:
-            role = turn.get("role", "")
-            parts = turn.get("parts", [])
-            text_content = ""
-            if isinstance(parts, list) and parts:
-                text_content = str(parts[0])
-            elif isinstance(turn.get("content"), str):
-                text_content = turn.get("content")
-
-            if role in ["user", "model"] and text_content.strip():
-                formatted_history.append(types.Content(
-                    role=role,
-                    parts=[types.Part.from_text(text=text_content.strip())]
-                ))
-                # Extract key nouns/topics for contextual RAG retrieval
-                words = [w for w in text_content.split() if len(w) > 3 and w.lower() not in ["what", "how", "where", "when", "tell", "details", "scheme", "post", "office", "avail", "apply", "please", "can", "with"]]
-                history_context_keywords.extend(words[:3])
-
-    # 1. Semantic Vector Search via ChromaDB & Dynamic RAG
-    rag_query = f"{' '.join(list(set(history_context_keywords))[-6:])} {user_message}".strip()
-    chroma_chunks = query_chroma_knowledge(rag_query, top_k=3)
-    retrieved_chunks = retrieve_top_chunks(rag_query, top_k=3)
-    
-    all_chunks = chroma_chunks + retrieved_chunks
-    context_text = ""
-    sources_list = []
-    if all_chunks:
-        context_blocks = [clean_chunk_text(chunk['text']) for chunk in all_chunks]
-        context_text = "\n\n".join([b for b in context_blocks if b])
-        sources_list = all_chunks
-
-    location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
-
-    # Detect 6-digit Indian PIN codes or locality search in message
-    pin_matches = re.findall(r'\b[1-9][0-9]{5}\b', user_message)
-    detected_pin_context = ""
-    if pin_matches:
-        pin_blocks = []
-        for p_code in set(pin_matches):
-            po_records = search_pincode(p_code)
-            if po_records:
-                for po in po_records[:3]:
-                    block = f"""
-**PIN Code Details**
-
-* **PIN Code:** {po.get('Pincode', p_code)}
+* **PIN Code:** {po.get('Pincode', pin_matches[0])}
 * **Post Office Name:** {po.get('Name', 'N/A')}
 * **Office Type:** {po.get('BranchType', 'Sub Post Office')} ({po.get('DeliveryStatus', 'Delivery')})
 * **Taluk:** {po.get('Taluk', 'N/A')}
@@ -333,12 +134,34 @@ def api_chat():
 * **Postal Region:** {po.get('Region', 'N/A')}
 * **Postal Circle:** {po.get('Circle', 'N/A')}
 * **Head Office (HO):** {po.get('HeadOffice', 'N/A')}"""
-                    pin_blocks.append(block.strip())
+            if conversation_id:
+                save_chat_message(conversation_id, "assistant", pin_response)
+            return Response(pin_response, content_type="text/plain; charset=utf-8")
 
-        if pin_blocks:
-            detected_pin_context = "\n\nStructured Master PIN Directory Records:\n" + "\n\n".join(pin_blocks)
+    # 2. Fetch past conversation history from Supabase for multi-turn context
+    history_turns = []
+    if conversation_id:
+        past_msgs = get_conversation_messages(conversation_id)
+        # Exclude the very last user message that was just saved
+        for m in past_msgs[:-1]:
+            role = "user" if m.get("role") == "user" else "model"
+            content = m.get("content", "")
+            if content:
+                history_turns.append(types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=content)]
+                ))
 
-    # Detect financial return / maturity calculation query
+    # 3. Supabase pgvector Semantic Search (Top 3 Chunks)
+    retrieved_chunks = search_documents(user_message, top_k=3, match_threshold=0.25)
+    context_text = ""
+    if retrieved_chunks:
+        blocks = [c["text"] for c in retrieved_chunks if c.get("text")]
+        context_text = "\n\n---\n\n".join(blocks)
+
+    location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
+
+    # Detect financial calculations
     calc_context = ""
     msg_lower = user_message.lower()
     amt_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|lac|lacs|l)\b', msg_lower)
@@ -352,26 +175,20 @@ def api_chat():
     if amt_val:
         if any(k in msg_lower for k in ["sukanya", "ssa", "daughter", "girl"]):
             res = calculate_sukanya_maturity(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Sukanya Samriddhi Account:\n- Annual Deposit: ₹{res['annual_deposit']:,.2f}\n- Deposit Period: 15 Years | Total Invested: ₹{res['total_invested']:,.2f}\n- Maturity Period: 21 Years | Interest Rate: 8.2%\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
+            calc_context = f"\n\nCalculation Sukanya: Deposit ₹{res['annual_deposit']:,.2f}/yr | Total Invested ₹{res['total_invested']:,.2f} | Interest ₹{res['interest_earned']:,.2f} | Maturity ₹{res['maturity_value']:,.2f}"
         elif any(k in msg_lower for k in ["scss", "senior citizen", "senior"]):
             res = calculate_scss_payout(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Senior Citizen Savings Scheme (SCSS):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 8.2%\n- Quarterly Payout: ₹{res['quarterly_payout']:,.2f}\n- Annual Interest: ₹{res['annual_payout']:,.2f}\n- Total Interest Earned: ₹{res['total_interest_earned']:,.2f}\n- Total Maturity Payout: ₹{res['total_maturity_payout']:,.2f}"
+            calc_context = f"\n\nCalculation SCSS: Deposit ₹{res['deposit_amount']:,.2f} | Quarterly Payout ₹{res['quarterly_payout']:,.2f} | Total Interest ₹{res['total_interest_earned']:,.2f}"
         elif any(k in msg_lower for k in ["ppf", "provident"]):
             res = calculate_ppf_maturity(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Public Provident Fund (PPF):\n- Annual Deposit: ₹{res['annual_deposit']:,.2f}\n- Tenure: 15 Years | Interest Rate: 7.1%\n- Total Invested: ₹{res['total_invested']:,.2f}\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
+            calc_context = f"\n\nCalculation PPF: Annual Deposit ₹{res['annual_deposit']:,.2f} | Total Invested ₹{res['total_invested']:,.2f} | Maturity ₹{res['maturity_value']:,.2f}"
         elif any(k in msg_lower for k in ["mis", "monthly income"]):
             res = calculate_mis_payout(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Post Office Monthly Income Scheme (MIS):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 7.4%\n- Monthly Income Payout: ₹{res['monthly_payout']:,.2f}\n- Annual Interest: ₹{res['annual_payout']:,.2f}\n- Total Interest Earned over 5 Years: ₹{res['total_interest_earned']:,.2f}"
-        elif any(k in msg_lower for k in ["nsc", "national savings certificate"]):
-            res = calculate_nsc_maturity(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for National Savings Certificate (NSC):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 5 Years | Interest Rate: 7.7% Compounded Annually\n- Interest Earned: ₹{res['interest_earned']:,.2f}\n- Final Maturity Amount: ₹{res['maturity_value']:,.2f}"
-        elif any(k in msg_lower for k in ["kvp", "kisan vikas"]):
-            res = calculate_kvp_maturity(amt_val)
-            calc_context = f"\n\nDeterministic Calculation Result for Kisan Vikas Patra (KVP):\n- Deposit Amount: ₹{res['deposit_amount']:,.2f}\n- Tenure: 115 Months (9 Years 7 Months) | Interest Rate: 7.5%\n- Final Maturity Amount (Doubles Principal): ₹{res['maturity_value']:,.2f}"
+            calc_context = f"\n\nCalculation MIS: Deposit ₹{res['deposit_amount']:,.2f} | Monthly Income ₹{res['monthly_payout']:,.2f}"
 
-    system_prompt = f"""You are Dak Sahayak (डाक सहायक), official India Post assistant. Always provide structured, factual breakdowns for all Post Office Small Savings Schemes including interest rates, compounding frequency, min/max limits, required KYC documents, and tax status (Section 80C / 80TTA / 80TTB).
+    system_prompt = f"""You are Dak Sahayak (डाक सहायक), the official India Post AI assistant.
 Respond strictly and fluently in {language}. If the language is a regional Indian language (e.g. Hindi, Kannada, Tamil, Telugu, Marathi, Bengali), generate natural native script text.
-Always maintain strict conversational continuity with previous turns in this dialogue session.
+Always provide structured, clear answers for Post Office Small Savings Schemes, POSB Banking charges, Mail/Speed Post rates, and Services.
 
 Official India Post Small Savings Rates:
 - Sukanya Samriddhi Account (SSA): 8.2% p.a. (Compounded annually)
@@ -385,8 +202,7 @@ Official India Post Small Savings Rates:
 - Post Office Recurring Deposit (RD): 6.7% p.a. (Compounded quarterly)
 - Post Office Savings Account (POSA): 4.0% p.a.
 
-MANDATORY RULE FOR BANK CHARGES & FEE SCHEDULE INQUIRIES:
-Whenever a user asks about Post Office bank charges, fee schedules, duplicate passbook fees, account transfer charges, nomination update costs, or cheque book fees, format your response in clean, concise bullet points or markdown tables using exact official India Post fee rates:
+Official India Post Bank Fee Schedule:
 - Duplicate Passbook: ₹50
 - Statement of Account / Deposit Receipt: ₹20 per case
 - Passbook in lieu of lost/mutilated certificate: ₹10 per registration
@@ -395,123 +211,68 @@ Whenever a user asks about Post Office bank charges, fee schedules, duplicate pa
 - Pledging of Account: ₹100
 - Cheque Book: Free for up to 10 leaves/year, ₹2 per leaf thereafter
 - Cheque Dishonour / Bounce: ₹100
-(Note: Statutory taxes/GST as applicable on above charges shall also be payable).
-
-MANDATORY RULE FOR ALL PIN CODE & LOCATION QUERIES:
-Whenever the user asks about a PIN code or its location/taluk/district/branch (e.g., "575020", "location of 575020", "Ullal", "PIN 110001"), you MUST respond using ONLY this exact structured template for each matching post office:
-
-**PIN Code Details**
-
-* **PIN Code:** [6-Digit PIN]
-* **Post Office Name:** [Full Office Name]
-* **Office Type:** [Sub Post Office (SO) / Branch Post Office (BO) / Head Post Office (HO)] ([Delivery / Non-Delivery])
-* **Taluk:** [Taluk / Tehsil]
-* **District:** [District Name]
-* **Postal Division:** [Division Name]
-* **Postal Region:** [Region Name]
-* **Postal Circle:** [Circle Name]
-* **Head Office (HO):** [Related Head Post Office]
-
-Do NOT write conversational fluff, introductory remarks, or concluding sentences before or after this block. Output the exact field labels verbatim.
 
 {location_str}
-{detected_pin_context}
 {calc_context}
 
-Official India Post Knowledge Base:
+Official India Post Knowledge Base (from Supabase Vector DB):
 {context_text}"""
 
-    reply_text = ""
-    if client:
-        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash", "gemini-3.7-flash", "gemini-flash-latest"]
-        for m in models_to_try:
-            try:
-                chat = client.chats.create(
-                    model=m,
-                    history=formatted_history,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        temperature=0.2
-                    )
-                )
-                response = chat.send_message(user_message)
-                if response and response.text:
-                    reply_text = response.text.strip()
-                    break
-            except Exception as ex:
+    def generate_stream():
+        full_text = ""
+        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        stream_success = False
+
+        if client:
+            for m in models_to_try:
                 try:
-                    response = client.models.generate_content(
+                    chat_session = client.chats.create(
                         model=m,
-                        contents=f"Previous Conversation:\n{formatted_history}\n\nCurrent Question: {user_message}",
+                        history=history_turns,
                         config=types.GenerateContentConfig(
                             system_instruction=system_prompt,
                             temperature=0.2
                         )
                     )
-                    if response and response.text:
-                        reply_text = response.text.strip()
+                    response_stream = chat_session.send_message_stream(user_message)
+                    for chunk in response_stream:
+                        if chunk and chunk.text:
+                            full_text += chunk.text
+                            yield chunk.text
+                    if full_text.strip():
+                        stream_success = True
                         break
-                except Exception as ex2:
-                    print(f"[-] Chat model {m} note: {ex2}")
+                except Exception as ex:
+                    try:
+                        response_stream = client.models.generate_content_stream(
+                            model=m,
+                            contents=f"System Prompt:\n{system_prompt}\n\nQuestion: {user_message}",
+                            config=types.GenerateContentConfig(temperature=0.2)
+                        )
+                        for chunk in response_stream:
+                            if chunk and chunk.text:
+                                full_text += chunk.text
+                                yield chunk.text
+                        if full_text.strip():
+                            stream_success = True
+                            break
+                    except Exception as ex2:
+                        print(f"[-] Streaming error with {m}: {ex2}")
 
-    # Fallback if reply_text is empty
-    if not reply_text:
-        if retrieved_chunks:
-            extracted_bullets = []
-            for chunk in retrieved_chunks:
-                text_content = chunk.get('text', '')
-                for raw_line in text_content.splitlines():
-                    clean_line = raw_line.strip().lstrip('*-•1234567890. ')
-                    if len(clean_line) > 25 and not clean_line.lower().startswith("source"):
-                        extracted_bullets.append(f"* {clean_line}")
-                    if len(extracted_bullets) >= 4:
-                        break
-                if len(extracted_bullets) >= 4:
-                    break
-            reply_text = "\n".join(extracted_bullets[:4]) if extracted_bullets else "* India Post provides comprehensive Mail, Savings Bank, and Insurance services across India."
-        else:
-            reply_text = "* India Post provides comprehensive Mail, Savings Bank, and Insurance services across India."
+        if not stream_success or not full_text.strip():
+            full_text = "India Post provides comprehensive Small Savings, Mail, and POSB Banking services across India."
+            yield full_text
 
-    # Determine category
-    category = "General Inquiry"
-    msg_lower = user_message.lower()
-    if "speed" in msg_lower or "tariff" in msg_lower or "rate" in msg_lower or "parcel" in msg_lower or "mail" in msg_lower or "tracking" in msg_lower:
-        category = "Speed Post & Mails"
-    elif "saving" in msg_lower or "ppf" in msg_lower or "sukanya" in msg_lower or "deposit" in msg_lower or "account" in msg_lower or "pomis" in msg_lower or "kvp" in msg_lower or "nsc" in msg_lower or "rd" in msg_lower or "td" in msg_lower:
-        category = "Post Office Savings Bank"
-    elif "pli" in msg_lower or "rpli" in msg_lower or "insurance" in msg_lower or "suraksha" in msg_lower or "santosh" in msg_lower:
-        category = "Postal Life Insurance"
-    elif "ippb" in msg_lower or "aadhaar" in msg_lower or "aeps" in msg_lower or "doorstep" in msg_lower or "passport" in msg_lower:
-        category = "IPPB & Aadhaar Services"
-    elif "complaint" in msg_lower or "grievance" in msg_lower or "timing" in msg_lower or "hours" in msg_lower or "charter" in msg_lower or "compensation" in msg_lower:
-        category = "Grievance & Facilities"
+        # Save assistant response to Supabase messages table
+        if conversation_id:
+            save_chat_message(conversation_id, "assistant", full_text)
+            # Update title on first turn
+            if len(history_turns) == 0:
+                update_conversation_title(conversation_id, user_message[:45])
 
-    log_id = log_chat(user_message, reply_text, matched_category=category)
+    return Response(stream_with_context(generate_stream()), content_type="text/plain; charset=utf-8")
 
-    return jsonify({
-        "reply": reply_text,
-        "response": reply_text,
-        "sources": [],
-        "log_id": log_id,
-        "category": category
-    })
-
-@app.route("/api/history", methods=["GET"])
-def api_history():
-    history = get_recent_history(limit=50)
-    return jsonify({"history": history})
-
-@app.route("/api/feedback", methods=["POST"])
-def api_feedback():
-    data = request.get_json() or {}
-    log_id = data.get("log_id")
-    feedback = data.get("feedback")
-
-    if not log_id or feedback not in ["positive", "negative"]:
-        return jsonify({"error": "Invalid log_id or feedback parameter"}), 400
-
-    success = update_feedback(log_id, feedback)
-    return jsonify({"success": success, "log_id": log_id, "feedback": feedback})
+# --- Calculator & PIN Endpoints ---
 
 @app.route("/api/calculator", methods=["POST"])
 def api_calculator():
@@ -530,6 +291,18 @@ def api_calculator():
         res = calculate_registered_post(postage_base=float(data.get("postage", 5.0)), ad_required=bool(data.get("ad_card", False)))
     elif "insurance" in service:
         res = calculate_insurance(data.get("insured_value", 200))
+    elif "sukanya" in service:
+        res = calculate_sukanya_maturity(float(data.get("annual_deposit", 10000)))
+    elif "ppf" in service:
+        res = calculate_ppf_maturity(float(data.get("annual_deposit", 10000)))
+    elif "scss" in service:
+        res = calculate_scss_payout(float(data.get("deposit_amount", 100000)))
+    elif "mis" in service:
+        res = calculate_mis_payout(float(data.get("deposit_amount", 100000)))
+    elif "nsc" in service:
+        res = calculate_nsc_maturity(float(data.get("deposit_amount", 10000)))
+    elif "kvp" in service:
+        res = calculate_kvp_maturity(float(data.get("deposit_amount", 10000)))
     else:
         res = calculate_speed_post(weight, distance)
 
@@ -538,7 +311,7 @@ def api_calculator():
 @app.route("/api/pincode/<query>", methods=["GET"])
 def api_pincode(query):
     query_str = str(query).strip()
-    results = search_pincode(query_str)
+    results = search_pincode_db(query_str)
     if results:
         return jsonify({"status": "Success", "results": results})
     return jsonify({"status": "Error", "message": f"No post office found for '{query_str}'"}), 404
@@ -549,9 +322,9 @@ def api_reverse_pincode():
     lon = request.args.get("lon", "").strip()
 
     if not lat or not lon:
-        return jsonify({"status": "Error", "message": "Latitude and longitude query parameters are required."}), 400
+        return jsonify({"status": "Error", "message": "Latitude and longitude required"}), 400
 
-    headers = {"User-Agent": "DakSahayakApp/1.0 (India Post AI Assistant)"}
+    headers = {"User-Agent": "DakSahayakApp/2.0 (India Post AI Assistant)"}
     url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=18&addressdetails=1"
 
     try:
@@ -560,14 +333,13 @@ def api_reverse_pincode():
             res_json = resp.json()
             address = res_json.get("address", {})
             postcode = address.get("postcode", "").strip()
-
             if postcode:
                 postcode_match = re.search(r'\b[1-9][0-9]{5}\b', postcode)
                 if postcode_match:
                     postcode = postcode_match.group(0)
 
             if postcode and len(postcode) == 6:
-                results = search_pincode(postcode)
+                results = search_pincode_db(postcode)
                 return jsonify({
                     "status": "Success",
                     "pincode": postcode,
@@ -583,4 +355,5 @@ def api_reverse_pincode():
     }), 200
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
