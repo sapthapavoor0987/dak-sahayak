@@ -114,6 +114,57 @@ def clean_chunk_text(text):
 # Initialize RAG on startup
 init_rag_system()
 
+# Initialize Persistent ChromaDB Vector Search Engine
+import chromadb
+from ingest_chroma import ingest_postal_knowledge
+
+CHROMA_DATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_data")
+chroma_client = None
+chroma_collection = None
+
+def init_chroma_system():
+    global chroma_client, chroma_collection
+    try:
+        if not os.path.exists(CHROMA_DATA_PATH):
+            ingest_postal_knowledge()
+            
+        chroma_client = chromadb.PersistentClient(path=CHROMA_DATA_PATH)
+        chroma_collection = chroma_client.get_or_create_collection(
+            name="postal_knowledge",
+            metadata={"hnsw:space": "cosine"}
+        )
+        print(f"[*] Persistent ChromaDB Client initialized at '{CHROMA_DATA_PATH}' (Collection: 'postal_knowledge', Documents: {chroma_collection.count()}).")
+    except Exception as e:
+        print(f"[-] Error initializing persistent ChromaDB: {e}")
+
+init_chroma_system()
+
+def query_chroma_knowledge(query_text: str, top_k: int = 3):
+    """Queries persistent ChromaDB collection for semantic vector matches."""
+    if not chroma_collection:
+        return []
+    try:
+        results = chroma_collection.query(
+            query_texts=[query_text],
+            n_results=top_k
+        )
+        retrieved_docs = []
+        if results and "documents" in results and results["documents"]:
+            docs = results["documents"][0]
+            metas = results.get("metadatas", [[]])[0]
+            for idx, doc in enumerate(docs):
+                meta = metas[idx] if idx < len(metas) else {}
+                retrieved_docs.append({
+                    "text": doc,
+                    "metadata": meta,
+                    "source": meta.get("source", "ChromaDB"),
+                    "source_display": meta.get("scheme_name", meta.get("service", "Chroma Vector DB"))
+                })
+        return retrieved_docs
+    except Exception as ex:
+        print(f"[-] Semantic Chroma vector query error: {ex}")
+        return []
+
 # PIN Code Lookup Mock Database fallback for offline resilience
 MOCK_PINCODES = {
     "110001": [
@@ -246,16 +297,18 @@ def api_chat():
                 words = [w for w in text_content.split() if len(w) > 3 and w.lower() not in ["what", "how", "where", "when", "tell", "details", "scheme", "post", "office", "avail", "apply", "please", "can", "with"]]
                 history_context_keywords.extend(words[:3])
 
-    # 1. Dynamic Context Retrieval via RAG (Combines history context with current query)
+    # 1. Semantic Vector Search via ChromaDB & Dynamic RAG
     rag_query = f"{' '.join(list(set(history_context_keywords))[-6:])} {user_message}".strip()
-    retrieved_chunks = retrieve_top_chunks(rag_query, top_k=5)
+    chroma_chunks = query_chroma_knowledge(rag_query, top_k=3)
+    retrieved_chunks = retrieve_top_chunks(rag_query, top_k=3)
     
+    all_chunks = chroma_chunks + retrieved_chunks
     context_text = ""
     sources_list = []
-    if retrieved_chunks:
-        context_blocks = [clean_chunk_text(chunk['text']) for chunk in retrieved_chunks]
-        context_text = "\n".join([b for b in context_blocks if b])
-        sources_list = retrieved_chunks
+    if all_chunks:
+        context_blocks = [clean_chunk_text(chunk['text']) for chunk in all_chunks]
+        context_text = "\n\n".join([b for b in context_blocks if b])
+        sources_list = all_chunks
 
     location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
 
