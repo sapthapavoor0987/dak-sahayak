@@ -4,7 +4,7 @@ import math
 import base64
 import requests
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 from google import genai
@@ -22,10 +22,9 @@ from calculator import (
     calculate_mis_payout, calculate_nsc_maturity, calculate_kvp_maturity
 )
 
-# Load environment variables
-load_dotenv()
+FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
 CORS(app)
 
 @app.after_request
@@ -34,6 +33,16 @@ def add_header(response):
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
+
+@app.route("/")
+def serve_index():
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+@app.route("/<path:path>")
+def serve_static(path):
+    if os.path.exists(os.path.join(FRONTEND_DIR, path)):
+        return send_from_directory(FRONTEND_DIR, path)
+    return send_from_directory(FRONTEND_DIR, "index.html")
 
 # Initialize Database
 init_db()
@@ -186,11 +195,6 @@ MOCK_PINCODES = {
         {"Name": "Chennai GPO", "BranchType": "Head Post Office", "DeliveryStatus": "Delivery", "District": "Chennai", "State": "Tamil Nadu", "Pincode": "600001"}
     ]
 }
-
-# Web Routes
-@app.route("/")
-def index():
-    return render_template("index.html")
 
 def get_real_pincode_details(pincode: str):
     p_clean = pincode.strip()
