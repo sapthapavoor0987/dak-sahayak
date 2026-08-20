@@ -1,0 +1,116 @@
+{
+  "scheme_code": "scss",
+  "scheme_name": "Senior Citizen Savings Scheme (SCSS)",
+  "language": "en",
+  "form_title": "Form-1 Application for Opening of SCSS Account",
+  "source_pdf": "assets/forms/form1_en_v2024.pdf",
+  "pages": 2,
+  "required_fields": [
+    "applicant_name",
+    "dob",
+    "pan",
+    "mobile",
+    "address",
+    "pincode",
+    "initial_deposit",
+    "nominee_name",
+    "nominee_relationship",
+    "nominee_share"
+  ],
+  "optional_fields": [
+    "father_or_spouse_name",
+    "gender",
+    "aadhaar",
+    "email",
+    "district",
+    "state",
+    "post_office",
+    "deposit_mode",
+    "nominee_dob",
+    "place"
+  ],
+  "validation_rules": {
+    "applicant_name": {
+      "type": "string",
+      "min_length": 2,
+      "max_length": 80,
+      "error_message": "Applicant name must be provided."
+    },
+    "dob": {
+      "type": "regex",
+      "pattern": "^(\\d{4}-\\d{2}-\\d{2}|\\d{2}/\\d{2}/\\d{4})$",
+      "error_message": "Date of birth must be in YYYY-MM-DD or DD/MM/YYYY format."
+    },
+    "pan": {
+      "type": "regex",
+      "pattern": "^[A-Z]{5}[0-9]{4}[A-Z]{1}$",
+      "error_message": "Invalid PAN format. Must be 10 characters (e.g. ABCDE1234F)."
+    },
+    "mobile": {
+      "type": "regex",
+      "pattern": "^[6-9]\\d{9}$",
+      "error_message": "Invalid Indian mobile number. Must be 10 digits starting with 6-9."
+    },
+    "pincode": {
+      "type": "regex",
+      "pattern": "^[1-9][0-9]{5}$",
+      "error_message": "Invalid PIN code. Must be a valid 6-digit postal code."
+    },
+    "initial_deposit": {
+      "type": "numeric",
+      "min_val": 1000,
+      "max_val": 3000000,
+      "error_message": "SCSS deposit must be between ₹1,000 and ₹30,00,000 (in multiples of ₹1,000)."
+    },
+    "nominee_name": {
+      "type": "string",
+      "min_length": 2,
+      "max_length": 80,
+      "error_message": "Nominee name is required."
+    },
+    "nominee_relationship": {
+      "type": "string",
+      "min_length": 2,
+      "max_length": 40,
+      "error_message": "Nominee relationship is required."
+    },
+    "nominee_share": {
+      "type": "numeric",
+      "min_val": 1,
+      "max_val": 100,
+      "error_message": "Nominee share must be between 1% and 100%."
+    }
+  },
+  "field_coordinates": {
+    "page_1": [
+      { "field": "post_office", "x": 95, "y": 737, "font_size": 9, "font_name": "Helvetica-Bold" },
+      { "field": "current_date", "x": 65, "y": 722, "font_size": 8.5, "font_name": "Helvetica" },
+      { "field": "_scheme_checkbox_scss", "static_value": "X", "x": 36, "y": 650, "font_size": 10, "font_name": "Helvetica-Bold" },
+      { "field": "_account_type_single", "static_value": "X", "x": 151, "y": 612, "font_size": 9, "font_name": "Helvetica-Bold" },
+      { "field": "initial_deposit_formatted", "x": 170, "y": 592, "font_size": 9, "font_name": "Helvetica-Bold" },
+      { "field": "initial_deposit_words", "x": 110, "y": 574, "font_size": 8, "font_name": "Helvetica" },
+      { "field": "deposit_mode", "x": 110, "y": 557, "font_size": 8, "font_name": "Helvetica" },
+      { "field": "applicant_name", "x": 155, "y": 517, "font_size": 9, "font_name": "Helvetica-Bold", "uppercase": true },
+      { "field": "father_or_spouse_name", "x": 185, "y": 497, "font_size": 8.5, "font_name": "Helvetica", "uppercase": true },
+      { "field": "dob", "x": 170, "y": 477, "font_size": 8.5, "font_name": "Helvetica" },
+      { "field": "gender", "x": 345, "y": 477, "font_size": 8.5, "font_name": "Helvetica", "uppercase": true },
+      { "field": "aadhaar", "x": 185, "y": 457, "font_size": 8.5, "font_name": "Helvetica" },
+      { "field": "pan", "x": 395, "y": 457, "font_size": 9, "font_name": "Helvetica-Bold", "uppercase": true },
+      { "field": "mobile", "x": 145, "y": 437, "font_size": 8.5, "font_name": "Helvetica" },
+      { "field": "email", "x": 375, "y": 437, "font_size": 8, "font_name": "Helvetica" },
+      { "field": "address", "x": 180, "y": 417, "font_size": 8, "font_name": "Helvetica", "max_width": 370 },
+      { "field": "pincode", "x": 435, "y": 397, "font_size": 9, "font_name": "Helvetica-Bold" },
+      { "field": "district_state", "x": 120, "y": 377, "font_size": 8.5, "font_name": "Helvetica" },
+      { "field": "permanent_address", "x": 180, "y": 357, "font_size": 8, "font_name": "Helvetica", "max_width": 370 }
+    ],
+    "page_2": [
+      { "field": "nominee_name_and_addr", "x": 70, "y": 713, "font_size": 8, "font_name": "Helvetica-Bold" },
+      { "field": "nominee_relationship", "x": 300, "y": 713, "font_size": 8, "font_name": "Helvetica" },
+      { "field": "nominee_share_formatted", "x": 405, "y": 713, "font_size": 8, "font_name": "Helvetica-Bold" },
+      { "field": "nominee_dob", "x": 445, "y": 713, "font_size": 8, "font_name": "Helvetica" },
+      { "field": "place", "x": 65, "y": 507, "font_size": 8.5, "font_name": "Helvetica" },
+      { "field": "current_date", "x": 65, "y": 487, "font_size": 8.5, "font_name": "Helvetica" },
+      { "field": "applicant_name_sig", "x": 410, "y": 486, "font_size": 8, "font_name": "Helvetica-Bold", "uppercase": true }
+    ]
+  }
+}
