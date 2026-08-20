@@ -153,11 +153,13 @@ def chat():
                 ))
 
     # 3. Supabase pgvector Semantic Search (Top 3 Chunks)
-    retrieved_chunks = search_documents(user_message, top_k=3, match_threshold=0.25)
     context_text = ""
-    if retrieved_chunks:
-        blocks = [c["text"] for c in retrieved_chunks if c.get("text")]
-        context_text = "\n\n---\n\n".join(blocks)
+    is_greeting = user_message.strip().lower() in ["hi", "hello", "hey", "namaste", "vanakkam", "namaskara", "good morning", "good afternoon", "good evening"]
+    if not is_greeting:
+        retrieved_chunks = search_documents(user_message, top_k=3, match_threshold=0.25)
+        if retrieved_chunks:
+            blocks = [c["text"] for c in retrieved_chunks if c.get("text")]
+            context_text = "\n\n---\n\n".join(blocks)
 
     location_str = f"\nUser Geolocation PIN Code: {pincode} ({user_location.get('suburb', '')}, {user_location.get('city', '')}, {user_location.get('state', '')})" if pincode else ""
 
@@ -220,7 +222,7 @@ Official India Post Knowledge Base (from Supabase Vector DB):
 
     def generate_stream():
         full_text = ""
-        models_to_try = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.5-flash", "gemini-flash-latest"]
+        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.6-flash"]
         stream_success = False
 
         if client:
@@ -353,6 +355,196 @@ def api_reverse_pincode():
         "status": "Fallback",
         "message": "Unable to resolve location to a valid 6-digit PIN. Please enter your PIN manually."
     }), 200
+
+# ================= FORMS ENGINE ENDPOINTS =================
+
+@app.route("/api/forms/fill", methods=["POST"])
+def api_fill_form():
+    """Generates official filled India Post Form-1 PDF."""
+    payload = request.get_json() or {}
+    scheme = str(payload.get("scheme", "ppf")).strip().lower()
+    language = str(payload.get("language", "en")).strip().lower()
+    raw_data = payload.get("data", {})
+
+    try:
+        val_res = validate_form_data(scheme, language, raw_data)
+        if not val_res["is_valid"]:
+            return jsonify({
+                "status": "error",
+                "error_type": "validation_error",
+                "message": val_res.get("message", "Validation failed"),
+                "missing_fields": val_res.get("missing_fields", []),
+                "invalid_fields": val_res.get("invalid_fields", [])
+            }), 400
+
+        pdf_buffer = generate_filled_pdf(scheme, language, raw_data)
+        filename = f"{scheme.upper()}_Account_Opening_Form1.pdf"
+        return send_file(
+            pdf_buffer,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=filename
+        )
+    except ValueError as ve:
+        return jsonify({"status": "error", "message": str(ve)}), 400
+    except Exception as e:
+        print(f"[-] Error generating form PDF: {e}")
+        return jsonify({"status": "error", "message": f"Server error generating PDF: {str(e)}"}), 500
+
+@app.route("/api/forms/chat-flow", methods=["POST"])
+def api_form_chat_flow():
+    """Handles structured multi-turn Q&A for auto-filling scheme forms."""
+    payload = request.get_json() or {}
+    scheme = str(payload.get("scheme", "ppf")).strip().lower()
+    step_idx = int(payload.get("step_index", 0))
+    collected = dict(payload.get("collected_data") or {})
+    user_input = str(payload.get("user_input", "")).strip()
+
+    steps = [
+        {
+            "field": "applicant_name",
+            "prompt": "Let's prepare your official India Post **PPF Account Opening Form (Form-1)**.\n\n**Step 1/12**: What is your **Full Name** as per your Aadhaar / PAN card? (in BLOCK letters)",
+            "validate": lambda v: len(v) >= 2,
+            "error": "Please enter a valid full name (at least 2 characters)."
+        },
+        {
+            "field": "father_or_spouse_name",
+            "prompt": "**Step 2/12**: What is your **Father's, Mother's, or Spouse's Name**?",
+            "validate": lambda v: len(v) >= 2,
+            "error": "Please provide a valid name."
+        },
+        {
+            "field": "dob",
+            "prompt": "**Step 3/12**: What is your **Date of Birth**? (Please use DD/MM/YYYY or YYYY-MM-DD)",
+            "validate": lambda v: bool(re.match(r"^(\d{4}-\d{2}-\d{2}|\d{2}/\d{2}/\d{4})$", v)),
+            "error": "Please enter your date of birth in DD/MM/YYYY format (e.g. 15/08/1990)."
+        },
+        {
+            "field": "gender",
+            "prompt": "**Step 4/12**: What is your **Gender**? (Male / Female / Other)",
+            "validate": lambda v: v.lower() in ["male", "female", "other", "m", "f", "o"],
+            "error": "Please specify Male, Female, or Other."
+        },
+        {
+            "field": "pan",
+            "prompt": "**Step 5/12**: What is your **PAN Card Number**? (10 alphanumeric characters, e.g. ABCDE1234F)",
+            "validate": lambda v: bool(re.match(r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$", v.upper())),
+            "error": "Invalid PAN format. Must be 10 alphanumeric characters (e.g. ABCDE1234F)."
+        },
+        {
+            "field": "aadhaar",
+            "prompt": "**Step 6/12**: What is your **12-digit Aadhaar Number**? (or type *'Skip'* if you prefer to write it by hand)",
+            "validate": lambda v: v.lower() in ["skip", "none", "na", "-"] or bool(re.match(r"^\d{12}$", v)),
+            "error": "Please enter a valid 12-digit Aadhaar number or type 'Skip'."
+        },
+        {
+            "field": "mobile",
+            "prompt": "**Step 7/12**: What is your **10-digit Mobile Number**?",
+            "validate": lambda v: bool(re.match(r"^[6-9]\d{9}$", v)),
+            "error": "Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9."
+        },
+        {
+            "field": "address",
+            "prompt": "**Step 8/12**: What is your full **Residential Address** (House/Flat No, Street, Locality)?",
+            "validate": lambda v: len(v) >= 5,
+            "error": "Please provide a complete residential address."
+        },
+        {
+            "field": "pincode",
+            "prompt": "**Step 9/12**: What is your **6-digit PIN Code**?",
+            "validate": lambda v: bool(re.match(r"^[1-9][0-9]{5}$", v)),
+            "error": "Please enter a valid 6-digit postal PIN code (e.g. 575001)."
+        },
+        {
+            "field": "initial_deposit",
+            "prompt": "**Step 10/12**: What is your **Initial Deposit Amount** in ₹? (Minimum ₹500, Maximum ₹1,50,000 per financial year)",
+            "validate": lambda v: (lambda clean: clean.isdigit() and 500 <= int(clean) <= 150000)(re.sub(r"[^\d]", "", v)),
+            "error": "PPF deposit amount must be between ₹500 and ₹1,50,000 per financial year."
+        },
+        {
+            "field": "nominee_name",
+            "prompt": "**Step 11/12**: Please provide the **Full Name of your Nominee** for this account.",
+            "validate": lambda v: len(v) >= 2,
+            "error": "Please enter the nominee's full name."
+        },
+        {
+            "field": "nominee_relationship",
+            "prompt": "**Step 12/12**: What is your **Relationship with the Nominee**? (e.g. Spouse, Son, Daughter, Mother, Father)",
+            "validate": lambda v: len(v) >= 2,
+            "error": "Please specify the nominee relationship."
+        }
+    ]
+
+    total_steps = len(steps)
+
+    # Initial invocation (start flow)
+    if step_idx == 0 and not user_input:
+        return jsonify({
+            "status": "in_progress",
+            "step_index": 0,
+            "total_steps": total_steps,
+            "prompt": steps[0]["prompt"],
+            "collected_data": {}
+        })
+
+    # Validate input for current step
+    current_step = steps[step_idx]
+    current_field = current_step["field"]
+
+    if not current_step["validate"](user_input):
+        return jsonify({
+            "status": "in_progress",
+            "step_index": step_idx,
+            "total_steps": total_steps,
+            "prompt": f"⚠️ {current_step['error']}\n\n{current_step['prompt']}",
+            "collected_data": collected
+        })
+
+    # Process and store value
+    if current_field == "pan":
+        collected[current_field] = user_input.upper()
+    elif current_field == "aadhaar":
+        if user_input.lower() in ["skip", "none", "na", "-"]:
+            collected[current_field] = ""
+        else:
+            collected[current_field] = user_input
+    elif current_field == "initial_deposit":
+        clean_num = re.sub(r"[^\d]", "", user_input)
+        collected[current_field] = int(clean_num)
+    elif current_field == "gender":
+        if user_input.lower() in ["m", "male"]:
+            collected[current_field] = "Male"
+        elif user_input.lower() in ["f", "female"]:
+            collected[current_field] = "Female"
+        else:
+            collected[current_field] = "Other"
+    else:
+        collected[current_field] = user_input
+
+    next_idx = step_idx + 1
+
+    # If completed all steps
+    if next_idx >= total_steps:
+        collected["nominee_share"] = 100
+        return jsonify({
+            "status": "completed",
+            "form_ready": True,
+            "scheme": scheme,
+            "step_index": next_idx,
+            "total_steps": total_steps,
+            "prompt": "🎉 **All required details for your PPF Account Opening Form have been successfully collected!**\n\nYour official print-ready **India Post Form-1 (GSPR 2018)** is ready for download below.",
+            "collected_data": collected
+        })
+
+    # Return next question
+    next_step = steps[next_idx]
+    return jsonify({
+        "status": "in_progress",
+        "step_index": next_idx,
+        "total_steps": total_steps,
+        "prompt": next_step["prompt"],
+        "collected_data": collected
+    })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

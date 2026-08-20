@@ -34,12 +34,16 @@ export default function ChatPage() {
 
   // 1. Initial Load: User & Conversations
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUser(user);
-        loadConversations();
-      }
-    });
+    supabase.auth.getUser()
+      .then(({ data: { user } = {} }) => {
+        if (user) {
+          setUser(user);
+          loadConversations();
+        }
+      })
+      .catch((err) => {
+        console.warn('Error fetching user in chat page:', err);
+      });
   }, []);
 
   const loadConversations = async () => {
@@ -137,7 +141,7 @@ export default function ChatPage() {
           { id: `resp-${Date.now()}`, role: 'assistant', content: finalText }
         ]);
         // Refresh conversation list to get updated title/timestamp
-        fetchConversations().then(setConversations).catch(() => {});
+        fetchConversations().then(setConversations).catch(() => { });
       },
       onError: (err) => {
         setIsStreaming(false);

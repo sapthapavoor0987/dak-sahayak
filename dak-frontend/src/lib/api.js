@@ -97,7 +97,38 @@ export async function calculateTariff(payload) {
 }
 
 export async function searchPincode(query) {
-  const res = await fetch(`${API_BASE}/pincode/${encodeURIComponent(query)}`);
+  const trimmed = String(query || '').trim();
+
+  // When a user searches a 6-digit PIN code, fetch live data from postalpincode API
+  if (/^\d{6}$/.test(trimmed)) {
+    try {
+      const res = await fetch(`https://api.postalpincode.in/pincode/${trimmed}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data[0]?.Status === 'Success' && Array.isArray(data[0]?.PostOffice)) {
+          return {
+            status: 'Success',
+            results: data[0].PostOffice.map((po) => ({
+              Pincode: po.Pincode || trimmed,
+              Name: po.Name,
+              BranchType: po.BranchType,
+              DeliveryStatus: po.DeliveryStatus,
+              District: po.District,
+              State: po.State,
+              Circle: po.Circle,
+              Division: po.Division,
+              Region: po.Region,
+              Block: po.Block
+            }))
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Direct postalpincode API fetch error, trying backend fallback:', err);
+    }
+  }
+
+  const res = await fetch(`${API_BASE}/pincode/${encodeURIComponent(trimmed)}`);
   if (!res.ok) throw new Error('Pincode not found');
   return await res.json();
 }
